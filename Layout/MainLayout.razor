@@ -1,0 +1,60 @@
+@inherits LayoutComponentBase
+@inject LangService Lang
+@inject AuthService Auth
+@inject NavigationManager Nav
+@implements IDisposable
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+    <main>
+        <div class="border-bottom px-4 py-2 d-flex justify-content-between align-items-center">
+            <div>
+                <button class="btn btn-link p-0 @(Lang.Lang == "en" ? "fw-bold text-decoration-none" : "text-muted")"
+                        @onclick='() => SetLang("en")' title="English">🇬🇧</button>
+                <span class="text-muted mx-2">|</span>
+                <button class="btn btn-link p-0 @(Lang.Lang == "fr" ? "fw-bold text-decoration-none" : "text-muted")"
+                        @onclick='() => SetLang("fr")' title="Français">🇫🇷</button>
+            </div>
+            <div class="small">
+                @if (Auth.IsAuthenticated)
+                {
+                    <span class="text-success me-2">☁ @Auth.UserEmail</span>
+                    <button class="btn btn-link btn-sm p-0 text-muted" @onclick="SignOut">Sign out</button>
+                }
+                else
+                {
+                    <a href="/login" class="text-muted">☁ Sign in to sync</a>
+                }
+            </div>
+        </div>
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await Lang.InitAsync();
+        await Auth.InitAsync();
+        Lang.Changed += StateHasChanged;
+        Auth.Changed += StateHasChanged;
+    }
+
+    private async Task SetLang(string lang) => await Lang.SetAsync(lang);
+
+    private async Task SignOut()
+    {
+        await Auth.SignOutAsync();
+        Nav.NavigateTo("/");
+    }
+
+    public void Dispose()
+    {
+        Lang.Changed -= StateHasChanged;
+        Auth.Changed -= StateHasChanged;
+    }
+}

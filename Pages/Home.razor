@@ -1,0 +1,247 @@
+@page "/"
+@inject TeleworkService Telework
+@inject LangService Lang
+@implements IDisposable
+
+<PageTitle>@Lang.T("nav_dashboard")</PageTitle>
+
+<h1 class="mb-4">@Lang.T("nav_dashboard")</h1>
+
+<div class="d-flex align-items-center mb-4 gap-2">
+    <label class="fw-semibold">@Lang.T("label_year")</label>
+    <select class="form-select w-auto" @bind="selectedYear" @bind:after="RefreshStats">
+        @foreach (var y in years)
+        {
+            <option value="@y">@y</option>
+        }
+    </select>
+</div>
+
+@if (stats != null)
+{
+    var proj = selectedYear == DateTime.Today.Year ? Recovery() : null;
+
+    @if (stats.IsAtFrenchSSRisk)
+    {
+        <div class="alert alert-danger">
+            <strong>@Lang.T("alert_urssaf_title")</strong> @Lang.T("alert_urssaf_body")
+        </div>
+    }
+    else if (stats.NeedsA1Certificate)
+    {
+        <div class="alert alert-warning">
+            <strong>@Lang.T("alert_a1_title")</strong> @Lang.T("alert_a1_body")
+            @if (hasCmu) { <div class="mt-1"><strong>@Lang.T("alert_cmu")</strong></div> }
+        </div>
+    }
+    else if (stats.IsOverCompanySSLimit)
+    {
+        <div class="alert @(proj?.Recoverable == false ? "alert-danger" : "alert-warning")">
+            <strong>⚠ Ripple limit exceeded (@stats.SocialSecurityPercent.ToString("0.0")%).</strong>
+            @if (proj != null)
+            {
+                @if (proj.Recoverable == false)
+                {
+                    <span> Not recoverable this year at Tue–Fri pace — projected end: ~@proj.EndOfYearPct.ToString("0.0")%.</span>
+                }
+                else
+                {
+                    <span> Back under 20% by <strong>@proj.RecoveryDate!.Value.ToString("MMM d")</strong> (~@proj.WeeksLeft week@(proj.WeeksLeft == 1 ? "" : "s") at Tue–Fri pace).</span>
+                }
+            }
+        </div>
+    }
+    else if (stats.IsApproachingCompanySSLimit)
+    {
+        <div class="alert alert-info"><strong>@Lang.T("alert_ss_approach")</strong></div>
+    }
+
+    @if (stats.IsAtTaxRisk)
+    {
+        <div class="alert alert-danger">
+            <strong>@Lang.T("alert_tax_exceed")</strong>
+        </div>
+    }
+    else if (stats.IsApproachingTaxLimit)
+    {
+        <div class="alert alert-warning">
+            <strong>@Lang.T("alert_tax_approach")</strong>
+        </div>
+    }
+
+    @if (stats.MissionsAtLimit)
+    {
+        <div class="alert alert-danger"><strong>@Lang.T("alert_mis_at")</strong></div>
+    }
+    else if (stats.MissionsNearLimit)
+    {
+        <div class="alert alert-warning">
+            <strong>@Lang.T("alert_mis_near", stats.MissionDays)</strong>
+        </div>
+    }
+
+    <div class="row g-4 mb-4">
+        @* Social Security card — bar scaled to 50% = full (disaster threshold) *@
+        <div class="col-md-6">
+            <div class="card h-100 @SsCardClass">
+                <div class="card-body">
+                    <h5 class="card-title">@Lang.T("card_ss_title")</h5>
+                    <p class="display-4 fw-bold @SsTextClass">@stats.SocialSecurityPercent.ToString("0.0")%</p>
+                    <div class="progress mb-1" style="height: 12px;">
+                        <div class="progress-bar @SsBarClass" style="width: @Pct(stats.SocialSecurityPercent, 50.0)%"></div>
+                    </div>
+                    <div class="d-flex justify-content-between small mb-2">
+                        <span class="text-muted">0%</span>
+                        <span class="text-warning fw-semibold">20% (Ripple)</span>
+                        <span class="text-warning fw-semibold">25% (A1)</span>
+                        <span class="text-danger fw-semibold">50%</span>
+                    </div>
+                    <p class="small mb-1 text-muted">@Lang.T("card_ss_sub", stats.TeleworkSSDays.ToString("0.#"), stats.TotalWorkedDays.ToString("0.#"))</p>
+                    <span class="badge @SsBadgeClass">@SsStatusText</span>
+                </div>
+            </div>
+        </div>
+
+        @* Tax card — bar scaled to 40% = full (hard limit) *@
+        <div class="col-md-6">
+            <div class="card h-100 @TaxCardClass">
+                <div class="card-body">
+                    <h5 class="card-title">@Lang.T("card_tax_title")</h5>
+                    <p class="display-4 fw-bold @TaxTextClass">@stats.TaxPercent.ToString("0.0")%</p>
+                    <div class="progress mb-1" style="height: 12px;">
+                        <div class="progress-bar @TaxBarClass" style="width: @Pct(stats.TaxPercent, 40.0)%"></div>
+                    </div>
+                    <div class="d-flex justify-content-between small mb-2">
+                        <span class="text-muted">0%</span>
+                        <span class="text-muted">20%</span>
+                        <span class="text-danger fw-semibold">40%</span>
+                    </div>
+                    <p class="small mb-1 text-muted">@Lang.T("card_tax_sub", stats.TeleworkPlusMissionTaxDays.ToString("0.#"), stats.TotalWorkedDays.ToString("0.#"))</p>
+                    <span class="badge @TaxBadgeClass">@TaxStatusText</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">@Lang.T("card_mis_title")</h5>
+            <div class="d-flex align-items-center gap-3">
+                <span class="display-6 fw-bold @MissionTextClass">@stats.MissionDays <span class="fs-6 fw-normal text-muted">/ 10</span></span>
+                <div class="flex-grow-1">
+                    <div class="progress" style="height: 12px;">
+                        <div class="progress-bar @MissionBarClass" style="width: @(Math.Min(stats.MissionDays * 10, 100))%"></div>
+                    </div>
+                </div>
+            </div>
+            <p class="small text-muted mt-2 mb-0">@Lang.T("card_mis_note")</p>
+        </div>
+    </div>
+
+    @if (selectedYear == DateTime.Today.Year)
+    {
+        <p class="text-muted small mb-4">@RemainingDays unlogged workdays left in @selectedYear.</p>
+    }
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">@Lang.T("summary_title", selectedYear)</h5>
+            <div class="row text-center g-2">
+                <div class="col"><div class="fs-3 fw-bold text-primary">@ChDays.ToString("0.#")</div><div class="small text-muted">@Lang.T("lbl_ch")</div></div>
+                <div class="col"><div class="fs-3 fw-bold text-info">@TwDays.ToString("0.#")</div><div class="small text-muted">@Lang.T("lbl_tw")</div></div>
+                <div class="col"><div class="fs-3 fw-bold text-warning">@MisDays</div><div class="small text-muted">@Lang.T("lbl_mis")</div></div>
+                <div class="col"><div class="fs-3 fw-bold text-secondary">@HolDays</div><div class="small text-muted">@Lang.T("lbl_hol")</div></div>
+                <div class="col"><div class="fs-3 fw-bold text-secondary">@SickDays</div><div class="small text-muted">@Lang.T("lbl_sick")</div></div>
+            </div>
+        </div>
+    </div>
+
+}
+
+@code {
+    private int selectedYear = DateTime.Today.Year;
+    private IEnumerable<int> years = Enumerable.Empty<int>();
+    private TeleworkStats? stats;
+    private bool hasCmu;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Lang.InitAsync();
+        Lang.Changed += StateHasChanged;
+        await Telework.LoadAsync();
+        hasCmu = await Telework.GetCmuPreferenceAsync();
+        years = Telework.GetAvailableYears();
+        stats = Telework.ComputeStats(selectedYear);
+    }
+
+    public void Dispose() => Lang.Changed -= StateHasChanged;
+
+    private Task RefreshStats()
+    {
+        stats = Telework.ComputeStats(selectedYear);
+        return Task.CompletedTask;
+    }
+
+
+    // Scale bar to maxVal so the bar fills at the legal limit
+    private string Pct(double val, double maxVal = 100.0) =>
+        Math.Min(val / maxVal * 100.0, 100.0).ToString("0.0", CultureInfo.InvariantCulture);
+
+    private string SsCardClass  => stats!.IsAtFrenchSSRisk ? "border-danger" : stats.NeedsA1Certificate ? "border-danger"  : stats.IsOverCompanySSLimit ? "border-warning" : "border-success";
+    private string SsTextClass  => stats!.IsAtFrenchSSRisk ? "text-danger"   : stats.NeedsA1Certificate ? "text-danger"    : stats.IsOverCompanySSLimit ? "text-warning"   : "text-success";
+    private string SsBarClass   => stats!.IsAtFrenchSSRisk ? "bg-danger"     : stats.NeedsA1Certificate ? "bg-danger"      : stats.IsOverCompanySSLimit ? "bg-warning"     : "bg-success";
+    private string SsBadgeClass => stats!.IsAtFrenchSSRisk ? "bg-danger"     : stats.NeedsA1Certificate ? "bg-danger"      : stats.IsOverCompanySSLimit ? "bg-warning text-dark" : "bg-success";
+    private string SsStatusText => stats!.IsAtFrenchSSRisk ? Lang.T("badge_urssaf") : stats.NeedsA1Certificate ? Lang.T("badge_a1") : stats.IsOverCompanySSLimit ? "Over Ripple limit" : stats.IsApproachingCompanySSLimit ? Lang.T("badge_approach25") : Lang.T("badge_ss_ok");
+
+    private string TaxCardClass  => stats!.IsAtTaxRisk ? "border-danger" : stats.IsApproachingTaxLimit ? "border-warning" : "border-success";
+    private string TaxTextClass  => stats!.IsAtTaxRisk ? "text-danger"   : stats.IsApproachingTaxLimit ? "text-warning"   : "text-success";
+    private string TaxBarClass   => stats!.IsAtTaxRisk ? "bg-danger"     : stats.IsApproachingTaxLimit ? "bg-warning"     : "bg-success";
+    private string TaxBadgeClass => stats!.IsAtTaxRisk ? "bg-danger"     : stats.IsApproachingTaxLimit ? "bg-warning text-dark" : "bg-success";
+    private string TaxStatusText => stats!.IsAtTaxRisk ? Lang.T("badge_fr_tax") : stats.IsApproachingTaxLimit ? Lang.T("badge_approach40") : Lang.T("badge_ch_tax");
+
+    private string MissionTextClass => stats!.MissionsAtLimit ? "text-danger" : stats.MissionsNearLimit ? "text-warning" : "";
+    private string MissionBarClass  => stats!.MissionsAtLimit ? "bg-danger"   : stats.MissionsNearLimit ? "bg-warning"   : "bg-primary";
+
+    private int RemainingDays => Telework.GetRemainingUnloggedWorkdays(selectedYear);
+
+    private record ProjectionResult(DateOnly? RecoveryDate, bool? Recoverable, int WeeksLeft, double EndOfYearPct);
+
+    private ProjectionResult Recovery()
+    {
+        if (stats == null) return new(null, null, 0, 0);
+
+        double tw     = stats.TeleworkSSDays;
+        double worked = stats.TotalWorkedDays;
+        var today     = DateOnly.FromDateTime(DateTime.Today);
+        var end       = new DateOnly(selectedYear, 12, 31);
+
+        for (var d = today.AddDays(1); d <= end; d = d.AddDays(1))
+        {
+            if (d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) continue;
+            var existing = Telework.GetByDate(d);
+            double days = existing?.IsHalfDay == true ? 0.5 : 1.0;
+            var type = existing?.Type
+                ?? (d.DayOfWeek == DayOfWeek.Monday ? DayType.TeleworkFrance : DayType.Switzerland);
+
+            if (type is DayType.Switzerland or DayType.TeleworkFrance or DayType.MissionAbroad)
+                worked += days;
+            if (type == DayType.TeleworkFrance)
+                tw += days;
+
+            if (worked > 0 && tw / worked * 100 <= 20)
+            {
+                int weeks = (int)Math.Ceiling((d.DayNumber - today.DayNumber) / 7.0);
+                return new(d, true, weeks, 0);
+            }
+        }
+
+        double endPct = worked > 0 ? tw / worked * 100 : 0;
+        return new(null, false, 0, endPct);
+    }
+
+    private double ChDays   => Telework.GetForYear(selectedYear).Where(d => d.Type == DayType.Switzerland).Sum(d => d.IsHalfDay ? 0.5 : 1.0);
+    private double TwDays   => Telework.GetForYear(selectedYear).Where(d => d.Type == DayType.TeleworkFrance).Sum(d => d.IsHalfDay ? 0.5 : 1.0);
+    private int    MisDays  => Telework.GetForYear(selectedYear).Count(d => d.Type == DayType.MissionAbroad);
+    private int    HolDays  => Telework.GetForYear(selectedYear).Count(d => d.Type is DayType.Vacation or DayType.PublicHoliday or DayType.CompanyHoliday or DayType.RegionalHoliday or DayType.RnR);
+    private int    SickDays => Telework.GetForYear(selectedYear).Count(d => d.Type == DayType.SickLeave);
+}

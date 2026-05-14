@@ -1,0 +1,268 @@
+@page "/settings"
+@inject TeleworkService Telework
+@inject LangService Lang
+@implements IDisposable
+
+<PageTitle>@Lang.T("nav_settings")</PageTitle>
+
+<div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+    <h1 class="mb-0">@Lang.T("nav_settings")</h1>
+    <select class="form-select w-auto" @bind="year" @bind:after="OnYearChanged">
+        @foreach (var y in years) { <option value="@y">@y</option> }
+    </select>
+    <div class="ms-auto d-flex align-items-center gap-2">
+        <label class="form-label mb-0 small fw-semibold">@Lang.T("cmu_check")</label>
+        <select class="form-select form-select-sm w-auto" @bind="insuranceType" @bind:after="SaveInsurance">
+            <option value="cmu">CMU</option>
+            <option value="lamal">LAMal</option>
+        </select>
+    </div>
+</div>
+
+@* ── Section 1: Swiss Public Holidays ── *@
+@{
+    var genevaHolidays   = TeleworkService.GetGenevaHolidays(year);
+    var genevaDates      = genevaHolidays.Select(h => h.Date).ToHashSet();
+    var customHolidays   = Telework.GetForYear(year)
+        .Where(d => d.Type == DayType.PublicHoliday && !genevaDates.Contains(d.Date))
+        .OrderBy(d => d.Date).ToList();
+    var allHolidayRows   = genevaHolidays
+        .Select(h => (h.Date, Name: Lang.Lang == "fr" ? h.NameFr : h.NameEn, IsGeneva: true,
+                      IsWeekend: h.Date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday, Id: (Guid?)null))
+        .Concat(customHolidays.Select(d => (d.Date, Name: d.Note ?? "—", IsGeneva: false, IsWeekend: false, Id: (Guid?)d.Id)))
+        .OrderBy(r => r.Date).ToList();
+}
+<div class="card mb-4">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span>🏛️ @Lang.T("settings_ph")</span>
+        <button class="btn btn-outline-primary btn-sm" @onclick="() => _showAddHoliday = !_showAddHoliday">+ @Lang.T("btn_add")</button>
+    </div>
+    @if (_showAddHoliday)
+    {
+        <div class="card-body border-bottom pb-3">
+            <div class="row g-2 align-items-end">
+                <div class="col-auto">
+                    <label class="form-label small">@Lang.T("label_date")</label>
+                    <input type="date" class="form-control form-control-sm" @bind="_newHolidayDate" />
+                </div>
+                <div class="col-sm-4">
+                    <label class="form-label small">@Lang.T("note_optional")</label>
+                    <input type="text" class="form-control form-control-sm" @bind="_newHolidayName"
+                           placeholder="@Lang.T("note_optional")" />
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-primary btn-sm" @onclick="AddCustomHoliday">@Lang.T("btn_add")</button>
+                    <button class="btn btn-outline-secondary btn-sm ms-1" @onclick="() => _showAddHoliday = false">✕</button>
+                </div>
+            </div>
+        </div>
+    }
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+            <tbody>
+                @foreach (var r in allHolidayRows)
+                {
+                    <tr class="@(r.IsWeekend ? "text-muted" : "")">
+                        <td class="ps-3 text-end" style="width:24px;">@r.Date.Day</td>
+                        <td style="width:36px;">@r.Date.ToString("MMM")</td>
+                        <td>
+                            @r.Name
+                            @if (r.IsWeekend) { <span class="text-muted small ms-1">(weekend)</span> }
+                        </td>
+                        <td class="text-end pe-3" style="width:40px;">
+                            @if (!r.IsGeneva && r.Id.HasValue)
+                            {
+                                <button class="btn btn-outline-danger btn-sm py-0"
+                                        @onclick="() => DeleteHoliday(r.Id!.Value)">🗑️</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@* ── Section 2: Company, Regional & R&R ── *@
+<div class="card mb-4">
+    <div class="card-header fw-semibold">🏢 @Lang.T("settings_company")</div>
+    <div class="card-body">
+        @* Add form *@
+        <div class="row g-2 align-items-end mb-3">
+            <div class="col-auto">
+                <label class="form-label small">@Lang.T("label_date")</label>
+                <input type="date" class="form-control form-control-sm" @bind="addDate" />
+            </div>
+            <div class="col-sm-3">
+                <label class="form-label small">@Lang.T("note_optional")</label>
+                <input type="text" class="form-control form-control-sm" @bind="addNote"
+                       placeholder="@Lang.T("note_optional")" />
+            </div>
+            <div class="col-auto">
+                <label class="form-label small">@Lang.T("col_type")</label>
+                <select class="form-select form-select-sm" @bind="addType">
+                    <option value="CompanyHoliday">@Lang.T("type_company")</option>
+                    <option value="RegionalHoliday">@Lang.T("type_regional")</option>
+                    <option value="RnR">@Lang.T("type_rnr")</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-sm" @onclick="AddCompanyDay">@Lang.T("btn_add")</button>
+            </div>
+        </div>
+
+        @* List by type *@
+        @{ var companyDays = GetCompanyDays(); }
+        @if (!companyDays.Any())
+        {
+            <p class="text-muted mb-0">@Lang.T("no_company", year)</p>
+        }
+        else
+        {
+            <table class="table table-sm mb-0">
+                <tbody>
+                    @foreach (var d in companyDays)
+                    {
+                        <tr>
+                            <td style="width:24px;">@TypeIcon(d.Type)</td>
+                            <td class="text-end" style="width:24px;">@d.Date.Day</td>
+                            <td style="width:36px;">@d.Date.ToString("MMM")</td>
+                            <td style="width:40px;">@d.Date.Year</td>
+                            <td>
+                                <span class="badge @TypeBadge(d.Type) me-2">@TypeLabel(d.Type)</span>
+                                @if (!string.IsNullOrEmpty(d.Note))
+                                {
+                                    <span class="text-muted">@d.Note</span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-outline-danger btn-sm py-0"
+                                        @onclick="() => DeleteDay(d.Id)">🗑️</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@* ── Section 3: My Vacations ── *@
+<div class="card mb-4">
+    <div class="card-header fw-semibold">🌴 @Lang.T("settings_vac")</div>
+    <div class="card-body">
+        @{ var periods = Telework.GetVacationPeriods(year).ToList(); }
+        @if (!periods.Any())
+        {
+            <p class="text-muted mb-0">@Lang.T("no_vacations", year)</p>
+        }
+        else
+        {
+            <table class="table table-sm mb-0">
+                <tbody>
+                    @foreach (var p in periods)
+                    {
+                        <tr>
+                            <td>🌴</td>
+                            <td>@p.Start.ToString("dd MMM")</td>
+                            <td class="text-muted">→</td>
+                            <td>@p.End.ToString("dd MMM yyyy")</td>
+                            <td><span class="badge bg-success">@Lang.T("x_days", p.Days)</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p class="text-muted small mt-2 mb-0">
+                @Lang.T("x_days", periods.Sum(p => p.Days)) @(Lang.Lang == "fr" ? "au total" : "total")
+            </p>
+        }
+    </div>
+</div>
+
+@code {
+    private int year = DateTime.Today.Year;
+    private IEnumerable<int> years = Enumerable.Empty<int>();
+
+    private DateTime addDate      = DateTime.Today;
+    private string   addNote      = "";
+    private string   addType      = "CompanyHoliday";
+    private string   insuranceType = "cmu";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Lang.InitAsync();
+        Lang.Changed += StateHasChanged;
+        await Telework.LoadAsync();
+        years = Telework.GetAvailableYears();
+        insuranceType = (await Telework.GetCmuPreferenceAsync()) ? "cmu" : "lamal";
+    }
+
+    private async Task SaveInsurance() =>
+        await Telework.SetCmuPreferenceAsync(insuranceType == "cmu");
+
+    public void Dispose() => Lang.Changed -= StateHasChanged;
+
+    private Task OnYearChanged() { StateHasChanged(); return Task.CompletedTask; }
+
+    private bool     _showAddHoliday;
+    private DateTime _newHolidayDate = DateTime.Today;
+    private string   _newHolidayName = "";
+
+    private async Task AddCustomHoliday()
+    {
+        if (string.IsNullOrWhiteSpace(_newHolidayName)) return;
+        await Telework.AddAsync(new WorkDay
+        {
+            Date = DateOnly.FromDateTime(_newHolidayDate),
+            Type = DayType.PublicHoliday,
+            Note = _newHolidayName.Trim()
+        });
+        _showAddHoliday = false;
+        _newHolidayName = "";
+    }
+
+    private async Task DeleteHoliday(Guid id) => await Telework.DeleteAsync(id);
+
+    private async Task AddCompanyDay()
+    {
+        if (!Enum.TryParse<DayType>(addType, out var type)) return;
+        await Telework.AddAsync(new WorkDay
+        {
+            Date = DateOnly.FromDateTime(addDate),
+            Type = type,
+            Note = string.IsNullOrWhiteSpace(addNote) ? null : addNote.Trim()
+        });
+        addNote = "";
+    }
+
+    private async Task DeleteDay(Guid id) => await Telework.DeleteAsync(id);
+
+    private IEnumerable<WorkDay> GetCompanyDays() =>
+        Telework.GetForYear(year)
+            .Where(d => d.Type is DayType.CompanyHoliday or DayType.RegionalHoliday or DayType.RnR)
+            .OrderBy(d => d.Date);
+
+    private string TypeIcon(DayType t) => t switch
+    {
+        DayType.CompanyHoliday  => "🏢",
+        DayType.RegionalHoliday => "🗺️",
+        DayType.RnR             => "💆",
+        _ => ""
+    };
+
+    private string TypeLabel(DayType t) => t switch
+    {
+        DayType.CompanyHoliday  => Lang.T("lbl_company"),
+        DayType.RegionalHoliday => Lang.T("lbl_regional"),
+        DayType.RnR             => Lang.T("lbl_rnr"),
+        _ => t.ToString()
+    };
+
+    private string TypeBadge(DayType t) => t switch
+    {
+        DayType.CompanyHoliday  => "bg-company",
+        DayType.RegionalHoliday => "bg-regional",
+        DayType.RnR             => "bg-rnr",
+        _ => "bg-secondary"
+    };
+}

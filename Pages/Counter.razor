@@ -1,0 +1,92 @@
+@page "/journal"
+@inject TeleworkService Telework
+@inject LangService Lang
+@implements IDisposable
+
+<PageTitle>@Lang.T("nav_log")</PageTitle>
+
+<h1 class="mb-4">@Lang.T("page_log")</h1>
+
+<div class="d-flex align-items-center gap-2 mb-3">
+    <label class="fw-semibold">@Lang.T("label_year")</label>
+    <select class="form-select w-auto" @bind="filterYear">
+        @foreach (var y in years)
+        {
+            <option value="@y">@y</option>
+        }
+    </select>
+    <span class="text-muted small ms-2">@Telework.GetForYear(filterYear).Count() @Lang.T("entries")</span>
+</div>
+
+<div class="list-group">
+    @foreach (var day in Telework.GetForYear(filterYear))
+    {
+        <div class="list-group-item d-flex align-items-center gap-2">
+            <span>@DayIcon(day.Type)</span>
+            <strong>@day.Date.ToString("ddd dd/MM/yyyy")</strong>
+            <span class="badge @TypeBadgeClass(day.Type)">@TypeLabel(day.Type)</span>
+            @if (day.IsHalfDay) { <span class="badge bg-secondary">½</span> }
+        </div>
+    }
+    @if (!Telework.GetForYear(filterYear).Any())
+    {
+        <div class="list-group-item text-muted text-center py-4">@Lang.T("no_entries", filterYear)</div>
+    }
+</div>
+
+@code {
+    private int filterYear = DateTime.Today.Year;
+    private IEnumerable<int> years = Enumerable.Empty<int>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Lang.InitAsync();
+        Lang.Changed += StateHasChanged;
+        await Telework.LoadAsync();
+        years = Telework.GetAvailableYears();
+    }
+
+    public void Dispose() => Lang.Changed -= StateHasChanged;
+
+    private string DayIcon(DayType t) => t switch
+    {
+        DayType.Switzerland    => "🇨🇭",
+        DayType.TeleworkFrance => "🏠",
+        DayType.MissionAbroad  => "✈️",
+        DayType.Vacation        => "🌴",
+        DayType.PublicHoliday   => "🏛️",
+        DayType.CompanyHoliday  => "🏢",
+        DayType.RegionalHoliday => "🗺️",
+        DayType.RnR             => "💆",
+        DayType.SickLeave      => "🤒",
+        _ => "?"
+    };
+
+    private string TypeLabel(DayType t) => t switch
+    {
+        DayType.Switzerland    => Lang.T("lbl_ch"),
+        DayType.TeleworkFrance => Lang.T("lbl_tw"),
+        DayType.MissionAbroad  => Lang.T("lbl_mis"),
+        DayType.Vacation        => Lang.T("lbl_hol"),
+        DayType.PublicHoliday   => Lang.T("lbl_ph"),
+        DayType.CompanyHoliday  => Lang.T("lbl_company"),
+        DayType.RegionalHoliday => Lang.T("lbl_regional"),
+        DayType.RnR             => Lang.T("lbl_rnr"),
+        DayType.SickLeave      => Lang.T("lbl_sick"),
+        _ => t.ToString()
+    };
+
+    private string TypeBadgeClass(DayType t) => t switch
+    {
+        DayType.Switzerland    => "bg-primary",
+        DayType.TeleworkFrance => "bg-info text-dark",
+        DayType.MissionAbroad  => "bg-warning text-dark",
+        DayType.Vacation        => "bg-success",
+        DayType.PublicHoliday   => "bg-ph",
+        DayType.CompanyHoliday  => "bg-company",
+        DayType.RegionalHoliday => "bg-regional",
+        DayType.RnR             => "bg-rnr",
+        DayType.SickLeave      => "bg-secondary",
+        _ => "bg-dark"
+    };
+}
