@@ -123,8 +123,8 @@ public static class Strings
         [("en","card_mis_note")]   = "These days also count toward the 40% tax quota.",
         [("fr","summary_title")]   = "Récapitulatif {0}",
         [("en","summary_title")]   = "Summary {0}",
-        [("fr","cmu_check")]       = "J'ai la CMU (pas LAMal)",
-        [("en","cmu_check")]       = "I have CMU (not LAMal)",
+        [("fr","cmu_check")]       = "Assurance maladie",
+        [("en","cmu_check")]       = "Health insurance",
         [("fr","label_year")]      = "Année :",
         [("en","label_year")]      = "Year:",
 

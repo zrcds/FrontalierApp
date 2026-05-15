@@ -1,0 +1,364 @@
+@page "/calendar"
+@using System.IO
+@using System.Text
+@inject TeleworkService Telework
+@inject LangService Lang
+@implements IDisposable
+
+<PageTitle>@Lang.T("nav_calendar")</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="mb-0">@Lang.T("nav_calendar")</h1>
+    <button class="btn btn-outline-secondary btn-sm" @onclick='() => showImport = !showImport'>
+        📥 @Lang.T("import_title")
+    </button>
+</div>
+
+@* Import panel *@
+@if (showImport)
+{
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-sm-5">
+                    <label class="form-label">@Lang.T("import_label")</label>
+                    <InputFile OnChange="ImportEnvoyCsv" accept=".csv" class="form-control" />
+                    <div class="form-text">@Lang.T("import_hint")</div>
+                </div>
+                <div class="col-sm-7">
+                    <label class="form-label">@Lang.T("range_title")</label>
+                    <div class="d-flex gap-2 flex-wrap align-items-center">
+                        <input type="date" class="form-control w-auto" @bind="rangeFrom" />
+                        <span class="text-muted">→</span>
+                        <input type="date" class="form-control w-auto" @bind="rangeTo" />
+                        <select class="form-select w-auto" @bind="rangeType">
+                            <option value="Switzerland">@Lang.T("type_ch")</option>
+                            <option value="TeleworkFrance">@Lang.T("type_tw")</option>
+                            <option value="MissionAbroad">@Lang.T("type_mis")</option>
+                            <option value="Vacation">@Lang.T("type_hol")</option>
+                    <option value="PublicHoliday">@Lang.T("type_ph")</option>
+                    <option value="CompanyHoliday">@Lang.T("type_company")</option>
+                    <option value="RegionalHoliday">@Lang.T("type_regional")</option>
+                    <option value="RnR">@Lang.T("type_rnr")</option>
+                            <option value="SickLeave">@Lang.T("type_sick")</option>
+                        </select>
+                        <button class="btn btn-primary btn-sm" @onclick="ApplyRange"
+                                disabled="@(rangeTo < rangeFrom)">
+                            @Lang.T("range_apply")
+                        </button>
+                    </div>
+                </div>
+            </div>
+            @if (!string.IsNullOrEmpty(importMessage))
+            {
+                <div class="alert @importAlertClass mt-3 mb-0 py-2">@importMessage</div>
+            }
+        </div>
+    </div>
+}
+
+@* Month navigation *@
+<div class="d-flex align-items-center gap-2 mb-3">
+    <button class="btn btn-outline-secondary btn-sm px-3" @onclick="PrevMonth">‹</button>
+    <span class="fw-semibold fs-5" style="min-width:180px;text-align:center;text-transform:capitalize;">
+        @(new DateTime(_year, _month, 1).ToString("MMMM yyyy"))
+    </span>
+    <button class="btn btn-outline-secondary btn-sm px-3" @onclick="NextMonth">›</button>
+    <button class="btn btn-link btn-sm" @onclick="GoToToday">@Lang.T("today")</button>
+</div>
+
+@* Month + YTD stats bar *@
+@{
+    var ms  = MonthStats();
+    var ytd = YtdStats();
+    Func<double, string> ssColor = p => p < 20 ? "text-success fw-semibold" : p < 25 ? "text-warning fw-semibold" : "text-danger fw-semibold";
+}
+@if (ytd.TotalWorkedDays > 0)
+{
+    <div class="d-flex gap-3 align-items-center small mb-3 flex-wrap">
+        <span class="text-muted fw-semibold">YTD SS</span>
+        <span class="text-muted"><span class="@ssColor(ytd.SocialSecurityPercent)">@ytd.SocialSecurityPercent.ToString("0.0")%</span>
+            <span class="ms-1">(@ytd.TeleworkSSDays.ToString("0.#") TW / @ytd.TotalWorkedDays.ToString("0.#") worked)</span></span>
+        @if (ms.TotalWorkedDays > 0)
+        {
+            <span class="text-muted">· this month <span class="@ssColor(ms.SocialSecurityPercent)">@ms.SocialSecurityPercent.ToString("0.0")%</span></span>
+        }
+    </div>
+}
+
+@* Legend *@
+<div class="d-flex gap-2 flex-wrap mb-3 small">
+    <span class="legend-chip cal-ch">🇨🇭 @Lang.T("lbl_ch")</span>
+    <span class="legend-chip cal-tw">🏠 @Lang.T("lbl_tw")</span>
+    <span class="legend-chip cal-mis">✈️ @Lang.T("lbl_mis")</span>
+    <span class="legend-chip cal-hol">🌴 @Lang.T("lbl_hol")</span>
+    <span class="legend-chip cal-ph">🏛️ @Lang.T("lbl_ph")</span>
+    <span class="legend-chip cal-company">🏢 @Lang.T("lbl_company")</span>
+    <span class="legend-chip cal-regional">🗺️ @Lang.T("lbl_regional")</span>
+    <span class="legend-chip cal-rnr">💆 @Lang.T("lbl_rnr")</span>
+    <span class="legend-chip cal-sick">🤒 @Lang.T("lbl_sick")</span>
+</div>
+
+@* Calendar grid *@
+<div class="calendar-grid mb-3">
+    @foreach (var h in DayHeaders)
+    {
+        <div class="cal-header">@h</div>
+    }
+    @foreach (var cell in _cells)
+    {
+        <div class="cal-cell @CellClass(cell) @(selectedDate == cell.Date ? "selected" : "") @(!cell.IsCurrentMonth ? "other-month" : "")"
+             @onclick="() => SelectDate(cell)">
+            <span class="@(cell.Date == _today ? "today-num" : "")">@cell.Date.Day</span>
+            @if (cell.Entry != null)
+            {
+                <span class="cell-icon">@DayIcon(cell.Entry.Type)</span>
+            }
+        </div>
+    }
+</div>
+
+@* Edit panel — appears when a day is clicked *@
+@if (selectedDate.HasValue)
+{
+    <div class="card border-primary">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h6 class="mb-0 text-capitalize">
+                    @selectedDate.Value.ToDateTime(TimeOnly.MinValue).ToString("dddd d MMMM yyyy")
+                </h6>
+                <button type="button" class="btn-close" @onclick="CloseEdit"></button>
+            </div>
+            <div class="d-flex gap-3 flex-wrap align-items-center">
+                <select class="form-select w-auto" @bind="editType">
+                    <option value="None">— @Lang.T("not_logged") —</option>
+                    <option value="Switzerland">@Lang.T("type_ch")</option>
+                    <option value="TeleworkFrance">@Lang.T("type_tw")</option>
+                    <option value="MissionAbroad">@Lang.T("type_mis")</option>
+                    <option value="Vacation">@Lang.T("type_hol")</option>
+                    <option value="PublicHoliday">@Lang.T("type_ph")</option>
+                    <option value="CompanyHoliday">@Lang.T("type_company")</option>
+                    <option value="RegionalHoliday">@Lang.T("type_regional")</option>
+                    <option value="RnR">@Lang.T("type_rnr")</option>
+                    <option value="SickLeave">@Lang.T("type_sick")</option>
+                </select>
+                @if (editType != "None")
+                {
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="editHalf" @bind="editHalfDay" />
+                        <label class="form-check-label" for="editHalf">@Lang.T("label_half")</label>
+                    </div>
+                }
+                <button class="btn btn-primary btn-sm" @onclick="SaveEdit">@Lang.T("btn_save")</button>
+                @if (_editEntry != null)
+                {
+                    <button class="btn btn-outline-danger btn-sm" @onclick="DeleteEdit">🗑️</button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private int _year  = DateTime.Today.Year;
+    private int _month = DateTime.Today.Month;
+    private DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private List<CalendarCell> _cells = [];
+
+    private DateOnly? selectedDate;
+    private string editType = "None";
+    private bool editHalfDay;
+    private WorkDay? _editEntry;
+
+    private bool showImport;
+    private string importMessage = "";
+    private string importAlertClass = "alert-success";
+    private DateTime rangeFrom = DateTime.Today;
+    private DateTime rangeTo   = DateTime.Today;
+    private DayType  rangeType = DayType.Vacation;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Lang.InitAsync();
+        Lang.Changed += StateHasChanged;
+        await Telework.LoadAsync();
+        BuildCells();
+    }
+
+    public void Dispose() => Lang.Changed -= StateHasChanged;
+
+    // ── Calendar navigation ──────────────────────────────────────────────
+
+    private void BuildCells()
+    {
+        var first = new DateOnly(_year, _month, 1);
+        var dow = (int)first.DayOfWeek;
+        var offset = dow == 0 ? 6 : dow - 1; // Monday-based grid
+        _cells = [];
+        var d = first.AddDays(-offset);
+        for (int i = 0; i < 42; i++, d = d.AddDays(1))
+            _cells.Add(new CalendarCell(d, d.Month == _month, Telework.GetByDate(d)));
+    }
+
+    private void PrevMonth() { if (_month == 1) { _month = 12; _year--; } else _month--; BuildCells(); CloseEdit(); }
+    private void NextMonth() { if (_month == 12) { _month = 1; _year++; } else _month++; BuildCells(); CloseEdit(); }
+    private void GoToToday()  { _year = _today.Year; _month = _today.Month; BuildCells(); CloseEdit(); }
+
+    // ── Day selection & editing ──────────────────────────────────────────
+
+    private void SelectDate(CalendarCell cell)
+    {
+        if (selectedDate == cell.Date) { CloseEdit(); return; }
+        selectedDate = cell.Date;
+        _editEntry   = cell.Entry;
+        editType     = cell.Entry?.Type.ToString() ?? "None";
+        editHalfDay  = cell.Entry?.IsHalfDay ?? false;
+    }
+
+    private void CloseEdit() { selectedDate = null; _editEntry = null; }
+
+    private async Task SaveEdit()
+    {
+        if (selectedDate == null) return;
+        if (editType == "None")
+        {
+            if (_editEntry != null) await Telework.DeleteAsync(_editEntry.Id);
+        }
+        else
+        {
+            var type = Enum.Parse<DayType>(editType);
+            if (_editEntry == null)
+                await Telework.AddAsync(new WorkDay { Date = selectedDate.Value, Type = type, IsHalfDay = editHalfDay });
+            else
+            {
+                _editEntry.Type = type;
+                _editEntry.IsHalfDay = editHalfDay;
+                await Telework.UpdateAsync(_editEntry);
+            }
+        }
+        BuildCells();
+        CloseEdit();
+    }
+
+    private async Task DeleteEdit()
+    {
+        if (_editEntry != null) await Telework.DeleteAsync(_editEntry.Id);
+        BuildCells();
+        CloseEdit();
+    }
+
+    // ── Import ───────────────────────────────────────────────────────────
+
+    private async Task ImportEnvoyCsv(InputFileChangeEventArgs e)
+    {
+        importMessage = "";
+        try
+        {
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 2 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            var toAdd = new List<WorkDay>();
+            int skipped = 0;
+            bool headerSkipped = false;
+            string? line;
+            while ((line = await reader.ReadLineAsync()) != null)
+            {
+                if (!headerSkipped) { headerSkipped = true; continue; }
+                var fields = SplitCsvLine(line);
+                if (fields.Length < 15) continue;
+                var dateStr = Unquote(fields[13]);
+                var status  = Unquote(fields[14]);
+                if (status == "EXCLUDED_DAY") continue;
+                if (!DateOnly.TryParseExact(dateStr, "MM/dd/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)) continue;
+                if (Telework.HasDate(date)) { skipped++; continue; }
+                toAdd.Add(new WorkDay { Date = date, Type = status == "ONSITE" ? DayType.Switzerland : DayType.TeleworkFrance });
+            }
+            await Telework.AddRangeAsync(toAdd);
+            BuildCells();
+            importMessage = $"{toAdd.Count} imported, {skipped} skipped.";
+            importAlertClass = toAdd.Count > 0 ? "alert-success" : "alert-warning";
+        }
+        catch (Exception ex)
+        {
+            importMessage = $"Error: {ex.Message}";
+            importAlertClass = "alert-danger";
+        }
+    }
+
+    private async Task ApplyRange()
+    {
+        var count = await Telework.UpsertRangeAsync(DateOnly.FromDateTime(rangeFrom), DateOnly.FromDateTime(rangeTo), rangeType);
+        BuildCells();
+        importMessage = $"{count} day(s) updated.";
+        importAlertClass = "alert-success";
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+
+    private string[] DayHeaders => Lang.Lang == "fr"
+        ? ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+        : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+    private string CellClass(CalendarCell cell)
+    {
+        if (cell.Entry != null)
+            return cell.Entry.Type switch
+            {
+                DayType.Switzerland     => "cal-ch",
+                DayType.TeleworkFrance  => "cal-tw",
+                DayType.MissionAbroad   => "cal-mis",
+                DayType.Vacation        => "cal-hol",
+                DayType.SickLeave       => "cal-sick",
+                DayType.PublicHoliday   => "cal-ph",
+                DayType.CompanyHoliday  => "cal-company",
+                DayType.RegionalHoliday => "cal-regional",
+                DayType.RnR             => "cal-rnr",
+                _ => "cal-empty"
+            };
+        return cell.Date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday
+            ? "cal-weekend" : "cal-empty";
+    }
+
+    private static string DayIcon(DayType t) => t switch
+    {
+        DayType.Switzerland     => "🇨🇭",
+        DayType.TeleworkFrance  => "🏠",
+        DayType.MissionAbroad   => "✈️",
+        DayType.Vacation        => "🌴",
+        DayType.SickLeave       => "🤒",
+        DayType.PublicHoliday   => "🏛️",
+        DayType.CompanyHoliday  => "🏢",
+        DayType.RegionalHoliday => "🗺️",
+        DayType.RnR             => "💆",
+        _ => ""
+    };
+
+    private TeleworkStats MonthStats()
+    {
+        var days = Telework.GetForYear(_year).Where(d => d.Date.Month == _month).ToList();
+        return Stats(days);
+    }
+
+    private TeleworkStats YtdStats()
+    {
+        var days = Telework.GetForYear(_year).Where(d => d.Date.Month <= _month).ToList();
+        return Stats(days);
+    }
+
+    private static TeleworkStats Stats(List<WorkDay> days) => new()
+    {
+        TotalWorkedDays = days.Where(d => d.Type is DayType.Switzerland or DayType.TeleworkFrance or DayType.MissionAbroad).Sum(d => d.IsHalfDay ? 0.5 : 1.0),
+        TeleworkSSDays  = days.Where(d => d.Type == DayType.TeleworkFrance).Sum(d => d.IsHalfDay ? 0.5 : 1.0),
+        TeleworkTaxDays = days.Count(d => d.Type == DayType.TeleworkFrance),
+        MissionDays     = days.Count(d => d.Type == DayType.MissionAbroad),
+    };
+
+    private static string[] SplitCsvLine(string line)
+    {
+        var fields = new List<string>(); var sb = new StringBuilder(); bool inQ = false;
+        foreach (char c in line) { if (c == '"') inQ = !inQ; else if (c == ',' && !inQ) { fields.Add(sb.ToString()); sb.Clear(); } else sb.Append(c); }
+        fields.Add(sb.ToString()); return [.. fields];
+    }
+    private static string Unquote(string s) => s.Trim('"').Trim();
+
+    private record CalendarCell(DateOnly Date, bool IsCurrentMonth, WorkDay? Entry);
+}

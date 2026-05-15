@@ -1,0 +1,61 @@
+@page "/login"
+@inject AuthService Auth
+@inject TeleworkService Telework
+@inject NavigationManager Nav
+@inject LangService Lang
+
+<PageTitle>Sign in</PageTitle>
+
+<div class="d-flex justify-content-center mt-5">
+    <div class="card" style="width: 380px;">
+        <div class="card-body">
+            <h5 class="card-title mb-4">🔒 Sign in to sync</h5>
+            <div class="mb-3">
+                <label class="form-label small">Email</label>
+                <input type="email" class="form-control" @bind="email" @onkeydown="OnKey" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label small">Password</label>
+                <input type="password" class="form-control" @bind="password" @onkeydown="OnKey" />
+            </div>
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div class="alert alert-danger py-2 small">@error</div>
+            }
+            <button class="btn btn-primary w-100" @onclick="SignIn" disabled="@loading">
+                @(loading ? "Signing in…" : "Sign in")
+            </button>
+            <div class="text-center mt-3">
+                <a href="/" class="text-muted small">← Back without signing in</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string email    = "";
+    private string password = "";
+    private string error    = "";
+    private bool   loading;
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SignIn();
+    }
+
+    private async Task SignIn()
+    {
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password)) return;
+        loading = true; error = "";
+        var err = await Auth.SignInAsync(email.Trim(), password);
+        if (err != null)
+        {
+            error = err.Contains("Invalid") ? "Invalid email or password." : err;
+            loading = false;
+            return;
+        }
+        await Telework.LoadAsync();
+        await Telework.SyncWithSupabaseAsync();
+        Nav.NavigateTo("/");
+    }
+}

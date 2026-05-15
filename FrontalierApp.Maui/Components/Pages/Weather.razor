@@ -1,0 +1,111 @@
+@page "/export"
+@inject TeleworkService Telework
+@inject LangService Lang
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>@Lang.T("nav_export")</PageTitle>
+
+<h1 class="mb-4">@Lang.T("page_export")</h1>
+
+<div class="d-flex align-items-center gap-2 mb-4">
+    <label class="fw-semibold">@Lang.T("label_year")</label>
+    <select class="form-select w-auto" @bind="selectedYear">
+        @foreach (var y in years)
+        {
+            <option value="@y">@y</option>
+        }
+    </select>
+</div>
+
+@{
+    var s = Telework.ComputeStats(selectedYear);
+}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">@Lang.T("stats_title", selectedYear)</h5>
+        <table class="table table-sm w-auto">
+            <tr><td>@Lang.T("export_total")</td><td class="text-end fw-bold">@s.TotalWorkedDays.ToString("0.#")</td></tr>
+            <tr><td>@Lang.T("export_tw_ss")</td><td class="text-end">@s.TeleworkSSDays.ToString("0.#")</td></tr>
+            <tr>
+                <td>@Lang.T("export_ss_pct")</td>
+                <td class="text-end fw-bold @(s.IsAtFrenchSSRisk ? "text-danger" : s.NeedsA1Certificate ? "text-warning" : "text-success")">
+                    @s.SocialSecurityPercent.ToString("0.0")%
+                </td>
+            </tr>
+            <tr><td>@Lang.T("export_tw_tax")</td><td class="text-end">@s.TeleworkTaxDays.ToString("0.#")</td></tr>
+            <tr><td>@Lang.T("export_mis")</td><td class="text-end">@s.MissionDays / 10</td></tr>
+            <tr>
+                <td>@Lang.T("export_tax_pct")</td>
+                <td class="text-end fw-bold @(s.IsAtTaxRisk ? "text-danger" : s.IsApproachingTaxLimit ? "text-warning" : "text-success")">
+                    @s.TaxPercent.ToString("0.0")%
+                </td>
+            </tr>
+        </table>
+        <button class="btn btn-outline-primary" @onclick="DownloadCsv">@Lang.T("btn_csv")</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">@Lang.T("detail_title")</h5>
+        <table class="table table-sm table-hover">
+            <thead>
+                <tr>
+                    <th>@Lang.T("col_date")</th>
+                    <th>@Lang.T("col_type")</th>
+                    <th>@Lang.T("col_half")</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in Telework.GetForYear(selectedYear).OrderBy(x => x.Date))
+                {
+                    <tr>
+                        <td>@d.Date.ToString("dd/MM/yyyy")</td>
+                        <td>@TypeLabel(d.Type)</td>
+                        <td>@(d.IsHalfDay ? Lang.T("col_half_yes") : "")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private int selectedYear = DateTime.Today.Year;
+    private IEnumerable<int> years = Enumerable.Empty<int>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Lang.InitAsync();
+        Lang.Changed += StateHasChanged;
+        await Telework.LoadAsync();
+        years = Telework.GetAvailableYears();
+    }
+
+    public void Dispose() => Lang.Changed -= StateHasChanged;
+
+    private async Task DownloadCsv()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"{Lang.T("col_date")},{Lang.T("col_type")},{Lang.T("col_half")}");
+        foreach (var d in Telework.GetForYear(selectedYear).OrderBy(x => x.Date))
+            sb.AppendLine($"{d.Date:yyyy-MM-dd},{d.Type},{(d.IsHalfDay ? Lang.T("col_half_yes") : "")}");
+        await JS.InvokeVoidAsync("downloadTextFile", $"telework_{selectedYear}.csv", "text/csv", sb.ToString());
+    }
+
+    private string TypeLabel(DayType t) => t switch
+    {
+        DayType.Switzerland    => Lang.T("lbl_ch"),
+        DayType.TeleworkFrance => Lang.T("lbl_tw"),
+        DayType.MissionAbroad  => Lang.T("lbl_mis"),
+        DayType.Vacation        => Lang.T("lbl_hol"),
+        DayType.PublicHoliday   => Lang.T("lbl_ph"),
+        DayType.CompanyHoliday  => Lang.T("lbl_company"),
+        DayType.RegionalHoliday => Lang.T("lbl_regional"),
+        DayType.RnR             => Lang.T("lbl_rnr"),
+        DayType.SickLeave      => Lang.T("lbl_sick"),
+        _ => t.ToString()
+    };
+}

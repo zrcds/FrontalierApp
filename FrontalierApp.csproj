@@ -12,4 +12,19 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="9.0.15" PrivateAssets="all" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="FrontalierApp.Shared\FrontalierApp.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="FrontalierApp.Shared\**" />
+    <Content Remove="FrontalierApp.Shared\**" />
+    <EmbeddedResource Remove="FrontalierApp.Shared\**" />
+    <None Remove="FrontalierApp.Shared\**" />
+    <Compile Remove="FrontalierApp.Maui\**" />
+    <Content Remove="FrontalierApp.Maui\**" />
+    <EmbeddedResource Remove="FrontalierApp.Maui\**" />
+    <None Remove="FrontalierApp.Maui\**" />
+  </ItemGroup>
+
 </Project>

@@ -1,8 +1,8 @@
-using Blazored.LocalStorage;
+
 
 namespace FrontalierApp.Services;
 
-public class LangService(ILocalStorageService localStorage)
+public class LangService(IStorageService localStorage)
 {
     private const string LangKey = "app_lang";
     private string _lang = "en";

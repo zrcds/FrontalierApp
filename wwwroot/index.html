@@ -28,6 +28,18 @@
     </div>
     <script src="_framework/blazor.webassembly.js"></script>
     <script>
+        window.notifyMissingDays = function (count) {
+            const show = () => new Notification('Hey, where were you? 👀', {
+                body: count === 1 ? "Today's work day isn't logged yet — don't leave your compliance to chance!" : count + " work days are still unlogged. Your future self will thank you.",
+                icon: '/icon-192.png'
+            });
+            if (Notification.permission === 'granted') {
+                show();
+            } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(p => { if (p === 'granted') show(); });
+            }
+        };
+
         window.downloadTextFile = function (filename, contentType, content) {
             const blob = new Blob([content], { type: contentType + ';charset=utf-8' });
             const url = URL.createObjectURL(blob);

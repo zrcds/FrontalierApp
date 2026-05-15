@@ -9,6 +9,7 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddBlazoredLocalStorage();
+builder.Services.AddScoped<IStorageService, LocalStorageAdapter>();
 builder.Services.AddScoped(sp => new HttpClient());
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<SupabaseStorageService>();

@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="FrontalierApp.csproj" />
+  <Project Path="FrontalierApp.Maui/FrontalierApp.Maui.csproj" />
+  <Project Path="FrontalierApp.Shared/FrontalierApp.Shared.csproj" />
+</Solution>

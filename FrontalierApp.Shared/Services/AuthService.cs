@@ -1,4 +1,4 @@
-using Blazored.LocalStorage;
+
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -18,7 +18,7 @@ public class AuthUser
     [JsonPropertyName("email")] public string Email { get; set; } = "";
 }
 
-public class AuthService(HttpClient http, ILocalStorageService localStorage)
+public class AuthService(HttpClient http, IStorageService localStorage)
 {
     private const string SessionKey = "supabase_session";
 

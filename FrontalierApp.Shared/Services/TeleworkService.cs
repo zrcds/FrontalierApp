@@ -1,4 +1,4 @@
-using Blazored.LocalStorage;
+
 using FrontalierApp.Models;
 
 namespace FrontalierApp.Services;
@@ -29,7 +29,7 @@ public class TeleworkStats
     public bool MissionsAtLimit => MissionDays >= 10;
 }
 
-public class TeleworkService(ILocalStorageService localStorage, AuthService auth, SupabaseStorageService supabase)
+public class TeleworkService(IStorageService localStorage, AuthService auth, SupabaseStorageService supabase)
 {
     private const string StorageKey = "workdays_v1";
     private const string CmuKey     = "cmu_preference";
