@@ -5,6 +5,53 @@
 
 <PageTitle>@Lang.T("nav_dashboard")</PageTitle>
 
+@* ── Missing days modal ── *@
+@if (_missingDays.Count > 0)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.4);">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">📅 @_missingDays.Count unfilled day@(_missingDays.Count == 1 ? "" : "s")</h5>
+                    <button type="button" class="btn-close" @onclick="DismissMissing"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <table class="table table-sm mb-0">
+                        <tbody>
+                            @foreach (var day in _missingDays)
+                            {
+                                <tr>
+                                    <td class="ps-3" style="width:160px;">
+                                        @day.Date.ToDateTime(TimeOnly.MinValue).ToString("ddd d MMM")
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm" @bind="day.SelectedType">
+                                            <option value="Switzerland">@Lang.T("type_ch")</option>
+                                            <option value="TeleworkFrance">@Lang.T("type_tw")</option>
+                                            <option value="MissionAbroad">@Lang.T("type_mis")</option>
+                                            <option value="Vacation">@Lang.T("type_hol")</option>
+                                            <option value="PublicHoliday">@Lang.T("type_ph")</option>
+                                            <option value="CompanyHoliday">@Lang.T("type_company")</option>
+                                            <option value="RegionalHoliday">@Lang.T("type_regional")</option>
+                                            <option value="RnR">@Lang.T("type_rnr")</option>
+                                            <option value="SickLeave">@Lang.T("type_sick")</option>
+                                            <option value="Skip">— skip —</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="DismissMissing">Dismiss</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SaveMissing">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <h1 class="mb-4">@Lang.T("nav_dashboard")</h1>
 
 <div class="d-flex align-items-center mb-4 gap-2">
@@ -36,17 +83,18 @@
     }
     else if (stats.IsOverCompanySSLimit)
     {
-        <div class="alert @(proj?.Recoverable == false ? "alert-danger" : "alert-warning")">
+        var alertClass = proj?.EndOfYearPct >= 21 ? "alert-danger" : "alert-warning";
+        <div class="alert @alertClass">
             <strong>⚠ Ripple limit exceeded (@stats.SocialSecurityPercent.ToString("0.0")%).</strong>
             @if (proj != null)
             {
-                @if (proj.Recoverable == false)
+                @if (proj.Recoverable == true)
                 {
-                    <span> Not recoverable this year at Tue–Fri pace — projected end: ~@proj.EndOfYearPct.ToString("0.0")%.</span>
+                    <span> Back under 20% by <strong>@proj.RecoveryDate!.Value.ToString("MMM d")</strong> (~@proj.WeeksLeft week@(proj.WeeksLeft == 1 ? "" : "s") at Tue–Fri pace).</span>
                 }
                 else
                 {
-                    <span> Back under 20% by <strong>@proj.RecoveryDate!.Value.ToString("MMM d")</strong> (~@proj.WeeksLeft week@(proj.WeeksLeft == 1 ? "" : "s") at Tue–Fri pace).</span>
+                    <span> Projected year-end: ~<strong>@proj.EndOfYearPct.ToString("0.0")%</strong> at Tue–Fri pace.</span>
                 }
             }
         </div>
@@ -172,6 +220,8 @@
         hasCmu = await Telework.GetCmuPreferenceAsync();
         years = Telework.GetAvailableYears();
         stats = Telework.ComputeStats(selectedYear);
+        var missing = await Telework.GetAndMarkOpenAsync();
+        _missingDays = missing.Select(d => new MissingDayEntry(d)).ToList();
     }
 
     public void Dispose() => Lang.Changed -= StateHasChanged;
@@ -180,6 +230,29 @@
     {
         stats = Telework.ComputeStats(selectedYear);
         return Task.CompletedTask;
+    }
+
+    // ── Missing days modal ────────────────────────────────────────────
+
+    private class MissingDayEntry(DateOnly date)
+    {
+        public DateOnly Date         { get; } = date;
+        public string   SelectedType { get; set; } = "Switzerland";
+    }
+
+    private List<MissingDayEntry> _missingDays = [];
+
+    private void DismissMissing() => _missingDays = [];
+
+    private async Task SaveMissing()
+    {
+        foreach (var entry in _missingDays.Where(e => e.SelectedType != "Skip"))
+        {
+            if (Enum.TryParse<DayType>(entry.SelectedType, out var type))
+                await Telework.AddAsync(new WorkDay { Date = entry.Date, Type = type });
+        }
+        _missingDays = [];
+        stats = Telework.ComputeStats(selectedYear);
     }
 
 

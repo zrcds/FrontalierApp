@@ -442,4 +442,32 @@ public class TeleworkService(ILocalStorageService localStorage, AuthService auth
 
     public async Task<bool> GetCmuPreferenceAsync()         => await localStorage.GetItemAsync<bool>(CmuKey);
     public async Task       SetCmuPreferenceAsync(bool v)   => await localStorage.SetItemAsync(CmuKey, v);
+
+    // ── Missing days ──────────────────────────────────────────────────
+
+    private const string LastOpenedKey = "last_opened";
+
+    public async Task<List<DateOnly>> GetAndMarkOpenAsync()
+    {
+        var raw      = await localStorage.GetItemAsync<string>(LastOpenedKey);
+        var lastOpen = DateOnly.TryParse(raw, out var d) ? d : DateOnly.FromDateTime(DateTime.Today).AddDays(-14);
+        var today    = DateOnly.FromDateTime(DateTime.Today);
+
+        await localStorage.SetItemAsync(LastOpenedKey, today.ToString("yyyy-MM-dd"));
+
+        var missing = new List<DateOnly>();
+
+        // Past days: only shown once per session (between last open and yesterday)
+        for (var dt = lastOpen.AddDays(1); dt < today; dt = dt.AddDays(1))
+        {
+            if (dt.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) continue;
+            if (!HasDate(dt)) missing.Add(dt);
+        }
+
+        // Today: always checked on every load
+        if (today.DayOfWeek is not DayOfWeek.Saturday and not DayOfWeek.Sunday && !HasDate(today))
+            missing.Add(today);
+
+        return missing;
+    }
 }
