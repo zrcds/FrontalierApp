@@ -88,15 +88,15 @@
 
 @* Legend *@
 <div class="d-flex gap-2 flex-wrap mb-3 small">
-    <span class="legend-chip cal-ch">🇨🇭 @Lang.T("lbl_ch")</span>
+    <span class="legend-chip cal-ch">🏢 @Lang.T("lbl_ch")</span>
     <span class="legend-chip cal-tw">🏠 @Lang.T("lbl_tw")</span>
     <span class="legend-chip cal-mis">✈️ @Lang.T("lbl_mis")</span>
     <span class="legend-chip cal-hol">🌴 @Lang.T("lbl_hol")</span>
     <span class="legend-chip cal-ph">🏛️ @Lang.T("lbl_ph")</span>
-    <span class="legend-chip cal-company">🏢 @Lang.T("lbl_company")</span>
+    <span class="legend-chip cal-company">🎉 @Lang.T("lbl_company")</span>
     <span class="legend-chip cal-regional">🗺️ @Lang.T("lbl_regional")</span>
-    <span class="legend-chip cal-rnr">💆 @Lang.T("lbl_rnr")</span>
-    <span class="legend-chip cal-sick">🤒 @Lang.T("lbl_sick")</span>
+    <span class="legend-chip cal-rnr">🧘 @Lang.T("lbl_rnr")</span>
+    <span class="legend-chip cal-sick">➕ @Lang.T("lbl_sick")</span>
 </div>
 
 @* Calendar grid *@
@@ -118,42 +118,48 @@
     }
 </div>
 
-@* Edit panel — appears when a day is clicked *@
+@* Day edit modal *@
 @if (selectedDate.HasValue)
 {
-    <div class="card border-primary">
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <h6 class="mb-0 text-capitalize">
-                    @selectedDate.Value.ToDateTime(TimeOnly.MinValue).ToString("dddd d MMMM yyyy")
-                </h6>
-                <button type="button" class="btn-close" @onclick="CloseEdit"></button>
-            </div>
-            <div class="d-flex gap-3 flex-wrap align-items-center">
-                <select class="form-select w-auto" @bind="editType">
-                    <option value="None">— @Lang.T("not_logged") —</option>
-                    <option value="Switzerland">@Lang.T("type_ch")</option>
-                    <option value="TeleworkFrance">@Lang.T("type_tw")</option>
-                    <option value="MissionAbroad">@Lang.T("type_mis")</option>
-                    <option value="Vacation">@Lang.T("type_hol")</option>
-                    <option value="PublicHoliday">@Lang.T("type_ph")</option>
-                    <option value="CompanyHoliday">@Lang.T("type_company")</option>
-                    <option value="RegionalHoliday">@Lang.T("type_regional")</option>
-                    <option value="RnR">@Lang.T("type_rnr")</option>
-                    <option value="SickLeave">@Lang.T("type_sick")</option>
-                </select>
-                @if (editType != "None")
-                {
-                    <div class="form-check mb-0">
-                        <input class="form-check-input" type="checkbox" id="editHalf" @bind="editHalfDay" />
-                        <label class="form-check-label" for="editHalf">@Lang.T("label_half")</label>
-                    </div>
-                }
-                <button class="btn btn-primary btn-sm" @onclick="SaveEdit">@Lang.T("btn_save")</button>
-                @if (_editEntry != null)
-                {
-                    <button class="btn btn-outline-danger btn-sm" @onclick="DeleteEdit">🗑️</button>
-                }
+    <div class="modal-backdrop fade show" @onclick="CloseEdit"></div>
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-sm" @onclick:stopPropagation>
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title text-capitalize mb-0">
+                        @selectedDate.Value.ToDateTime(TimeOnly.MinValue).ToString("dddd d MMMM yyyy")
+                    </h6>
+                    <button type="button" class="btn-close" @onclick="CloseEdit"></button>
+                </div>
+                <div class="modal-body py-3">
+                    <select class="form-select mb-3" @bind="editType">
+                        <option value="None">— @Lang.T("not_logged") —</option>
+                        <option value="Switzerland">@Lang.T("type_ch")</option>
+                        <option value="TeleworkFrance">@Lang.T("type_tw")</option>
+                        <option value="MissionAbroad">@Lang.T("type_mis")</option>
+                        <option value="Vacation">@Lang.T("type_hol")</option>
+                        <option value="PublicHoliday">@Lang.T("type_ph")</option>
+                        <option value="CompanyHoliday">@Lang.T("type_company")</option>
+                        <option value="RegionalHoliday">@Lang.T("type_regional")</option>
+                        <option value="RnR">@Lang.T("type_rnr")</option>
+                        <option value="SickLeave">@Lang.T("type_sick")</option>
+                    </select>
+                    @if (editType != "None")
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="editHalf" @bind="editHalfDay" />
+                            <label class="form-check-label" for="editHalf">@Lang.T("label_half")</label>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer py-2">
+                    @if (_editEntry != null)
+                    {
+                        <button class="btn btn-outline-danger btn-sm me-auto" @onclick="DeleteEdit">🗑️</button>
+                    }
+                    <button class="btn btn-secondary btn-sm" @onclick="CloseEdit">@Lang.T("btn_cancel")</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SaveEdit">@Lang.T("btn_save")</button>
+                </div>
             </div>
         </div>
     </div>
@@ -320,15 +326,15 @@
 
     private static string DayIcon(DayType t) => t switch
     {
-        DayType.Switzerland     => "🇨🇭",
+        DayType.Switzerland     => "🏢",
         DayType.TeleworkFrance  => "🏠",
         DayType.MissionAbroad   => "✈️",
         DayType.Vacation        => "🌴",
-        DayType.SickLeave       => "🤒",
+        DayType.SickLeave       => "➕",
         DayType.PublicHoliday   => "🏛️",
-        DayType.CompanyHoliday  => "🏢",
+        DayType.CompanyHoliday  => "🎉",
         DayType.RegionalHoliday => "🗺️",
-        DayType.RnR             => "💆",
+        DayType.RnR             => "🧘",
         _ => ""
     };
 

@@ -19,7 +19,7 @@ public class TeleworkStats
     public double TeleworkPlusMissionTaxDays => TeleworkTaxDays + MissionDays;
 
     public bool IsApproachingCompanySSLimit => SocialSecurityPercent is >= 18 and < 20;
-    public bool IsOverCompanySSLimit        => SocialSecurityPercent is >= 20 and < 25;
+    public bool IsOverCompanySSLimit        => SocialSecurityPercent is > 20 and < 25;
     public bool NeedsA1Certificate          => SocialSecurityPercent is >= 25 and < 50;
     public bool IsAtFrenchSSRisk            => SocialSecurityPercent >= 50;
     public bool IsApproachingSSLimit => IsApproachingCompanySSLimit;
@@ -325,9 +325,9 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
 
     // ── Stats ─────────────────────────────────────────────────────────
 
-    public TeleworkStats ComputeStats(int year)
+    public TeleworkStats ComputeStats(int year, DateOnly? asOf = null)
     {
-        var days = _days.Where(d => d.Date.Year == year).ToList();
+        var days = _days.Where(d => d.Date.Year == year && (asOf == null || d.Date <= asOf.Value)).ToList();
 
         double totalWorkedDays = days
             .Where(d => d.Type is DayType.Switzerland or DayType.TeleworkFrance or DayType.MissionAbroad)
@@ -359,6 +359,16 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
             if (!HasDate(d)) count++;
         }
         return count;
+    }
+
+    public DateOnly? GetLastFutureLoggedWorkday(int year)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        return _days
+            .Where(d => d.Date.Year == year && d.Date > today &&
+                        d.Type is DayType.Switzerland or DayType.TeleworkFrance or DayType.MissionAbroad)
+            .Select(d => (DateOnly?)d.Date)
+            .Max();
     }
 
     public IEnumerable<int> GetAvailableYears()

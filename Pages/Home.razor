@@ -135,8 +135,17 @@
             <div class="card h-100 @SsCardClass">
                 <div class="card-body">
                     <h5 class="card-title">@Lang.T("card_ss_title")</h5>
-                    <p class="display-4 fw-bold @SsTextClass">@stats.SocialSecurityPercent.ToString("0.0")%</p>
-                    <div class="progress mb-1" style="height: 12px;">
+                    <div class="d-flex align-items-baseline gap-3">
+                        <p class="display-4 fw-bold @SsTextClass mb-0">@stats.SocialSecurityPercent.ToString("0.0")%</p>
+                        @if (plannedStats != null && Math.Abs(plannedStats.SocialSecurityPercent - stats!.SocialSecurityPercent) >= 0.05)
+                        {
+                            <span class="@PlannedSsTextClass fw-semibold" style="font-size:1.1rem;" title="Planned rate as of @plannedAsOf!.Value.ToString("MMM d")">
+                                → @plannedStats.SocialSecurityPercent.ToString("0.0")%
+                                <span class="text-muted fw-normal" style="font-size:0.75rem;">planned @plannedAsOf!.Value.ToString("MMM d")</span>
+                            </span>
+                        }
+                    </div>
+                    <div class="progress mb-1 mt-2" style="height: 12px;">
                         <div class="progress-bar @SsBarClass" style="width: @Pct(stats.SocialSecurityPercent, 50.0)%"></div>
                     </div>
                     <div class="d-flex justify-content-between small mb-2">
@@ -211,6 +220,8 @@
     private int selectedYear = DateTime.Today.Year;
     private IEnumerable<int> years = Enumerable.Empty<int>();
     private TeleworkStats? stats;
+    private TeleworkStats? plannedStats;
+    private DateOnly? plannedAsOf;
     private bool hasCmu;
 
     protected override async Task OnInitializedAsync()
@@ -220,7 +231,7 @@
         await Telework.LoadAsync();
         hasCmu = await Telework.GetCmuPreferenceAsync();
         years = Telework.GetAvailableYears();
-        stats = Telework.ComputeStats(selectedYear);
+        RefreshStatsInternal();
         var missing = await Telework.GetAndMarkOpenAsync();
         _missingDays = missing.Select(d => new MissingDayEntry(d)).ToList();
         if (_missingDays.Count > 0)
@@ -231,8 +242,17 @@
 
     private Task RefreshStats()
     {
-        stats = Telework.ComputeStats(selectedYear);
+        RefreshStatsInternal();
         return Task.CompletedTask;
+    }
+
+    private void RefreshStatsInternal()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        stats = Telework.ComputeStats(selectedYear, today);
+        var full = Telework.ComputeStats(selectedYear);
+        plannedAsOf = Telework.GetLastFutureLoggedWorkday(selectedYear);
+        plannedStats = plannedAsOf.HasValue ? full : null;
     }
 
     // ── Missing days modal ────────────────────────────────────────────
@@ -255,7 +275,7 @@
                 await Telework.AddAsync(new WorkDay { Date = entry.Date, Type = type });
         }
         _missingDays = [];
-        stats = Telework.ComputeStats(selectedYear);
+        RefreshStatsInternal();
     }
 
 
@@ -268,6 +288,13 @@
     private string SsBarClass   => stats!.IsAtFrenchSSRisk ? "bg-danger"     : stats.NeedsA1Certificate ? "bg-danger"      : stats.IsOverCompanySSLimit ? "bg-warning"     : "bg-success";
     private string SsBadgeClass => stats!.IsAtFrenchSSRisk ? "bg-danger"     : stats.NeedsA1Certificate ? "bg-danger"      : stats.IsOverCompanySSLimit ? "bg-warning text-dark" : "bg-success";
     private string SsStatusText => stats!.IsAtFrenchSSRisk ? Lang.T("badge_urssaf") : stats.NeedsA1Certificate ? Lang.T("badge_a1") : stats.IsOverCompanySSLimit ? "Over Ripple limit" : stats.IsApproachingCompanySSLimit ? Lang.T("badge_approach25") : Lang.T("badge_ss_ok");
+
+    private string PlannedSsTextClass => plannedStats == null ? "" :
+        plannedStats.SocialSecurityPercent >= 50 ? "text-danger" :
+        plannedStats.SocialSecurityPercent >= 25 ? "text-danger" :
+        plannedStats.SocialSecurityPercent > 20  ? "text-warning" :
+        plannedStats.SocialSecurityPercent >= 18 ? "text-warning" :
+        "text-success";
 
     private string TaxCardClass  => stats!.IsAtTaxRisk ? "border-danger" : stats.IsApproachingTaxLimit ? "border-warning" : "border-success";
     private string TaxTextClass  => stats!.IsAtTaxRisk ? "text-danger"   : stats.IsApproachingTaxLimit ? "text-warning"   : "text-success";
@@ -286,10 +313,10 @@
     {
         if (stats == null) return new(null, null, 0, 0);
 
+        var today  = DateOnly.FromDateTime(DateTime.Today);
+        var end    = new DateOnly(selectedYear, 12, 31);
         double tw     = stats.TeleworkSSDays;
         double worked = stats.TotalWorkedDays;
-        var today     = DateOnly.FromDateTime(DateTime.Today);
-        var end       = new DateOnly(selectedYear, 12, 31);
 
         for (var d = today.AddDays(1); d <= end; d = d.AddDays(1))
         {

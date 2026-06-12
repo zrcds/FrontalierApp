@@ -67,12 +67,12 @@
 .cal-ch       { background: #cfe2ff; }   /* blue    — Switzerland */
 .cal-tw       { background: #d1ecf1; }   /* cyan    — Telework   */
 .cal-mis      { background: #fff3cd; }   /* amber   — Mission    */
-.cal-hol      { background: #d1e7dd; }   /* green   — Vacation   */
-.cal-ph       { background: #e2d9f3; }   /* purple  — Public holiday */
-.cal-company  { background: #ffe8cc; }   /* orange  — Company    */
-.cal-regional { background: #fde8e8; }   /* rose    — Regional   */
-.cal-rnr      { background: #e8f5e9; }   /* mint    — R&R        */
-.cal-sick     { background: #e2e3e5; }   /* gray    — Sick       */
+.cal-hol      { background: #d1e7dd; }   /* sage green  — Vacation       */
+.cal-ph       { background: #c3e6cb; }   /* grass green — Public holiday */
+.cal-company  { background: #dcedc8; }   /* lime green  — Company        */
+.cal-regional { background: #b2dfdb; }   /* teal green  — Regional       */
+.cal-rnr      { background: #e8f5e9; }   /* mint        — R&R            */
+.cal-sick     { background: #d4e6d4; }   /* muted green — Sick           */
 
 /* Legend chips */
 .legend-chip {
