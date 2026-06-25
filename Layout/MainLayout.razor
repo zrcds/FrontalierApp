@@ -26,7 +26,7 @@
                 }
                 else
                 {
-                    <a href="/login" class="text-muted">☁ Sign in to sync</a>
+                    <a href="login" class="text-muted">☁ Sign in to sync</a>
                 }
             </div>
         </div>
@@ -51,7 +51,7 @@
     {
         Telework.Reset();
         await Auth.SignOutAsync();
-        Nav.NavigateTo("/login");
+        Nav.NavigateTo("login");
     }
 
     public void Dispose()

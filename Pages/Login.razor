@@ -26,7 +26,7 @@
                 @(loading ? "Signing in…" : "Sign in")
             </button>
             <div class="text-center mt-3">
-                <a href="/" class="text-muted small">← Back without signing in</a>
+                <a href="" class="text-muted small">← Back without signing in</a>
             </div>
         </div>
     </div>
@@ -56,6 +56,6 @@
         }
         Telework.Reset();
         await Telework.LoadAsync();
-        Nav.NavigateTo("/");
+        Nav.NavigateTo("");
     }
 }
