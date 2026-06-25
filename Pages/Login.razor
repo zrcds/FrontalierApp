@@ -54,8 +54,8 @@
             loading = false;
             return;
         }
+        Telework.Reset();
         await Telework.LoadAsync();
-        await Telework.SyncWithSupabaseAsync();
         Nav.NavigateTo("/");
     }
 }

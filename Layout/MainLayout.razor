@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @inject LangService Lang
 @inject AuthService Auth
+@inject TeleworkService Telework
 @inject NavigationManager Nav
 @implements IDisposable
 
@@ -48,8 +49,9 @@
 
     private async Task SignOut()
     {
+        Telework.Reset();
         await Auth.SignOutAsync();
-        Nav.NavigateTo("/");
+        Nav.NavigateTo("/login");
     }
 
     public void Dispose()

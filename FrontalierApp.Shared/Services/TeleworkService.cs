@@ -31,58 +31,35 @@ public class TeleworkStats
 
 public class TeleworkService(IStorageService localStorage, AuthService auth, SupabaseStorageService supabase)
 {
-    private const string StorageKey = "workdays_v1";
-    private const string CmuKey     = "cmu_preference";
-    private const string VersionKey  = "workdays_version";
-    private const int    CurrentVersion = 4;
+    private const string CmuKey = "cmu_preference";
     private List<WorkDay> _days = [];
     private bool _loaded;
 
-    // ── Load & migrate ────────────────────────────────────────────────
+    public void Reset() => _loaded = false;
+
+    // ── Load ──────────────────────────────────────────────────────────
 
     public async Task LoadAsync()
     {
         if (_loaded) return;
-        _days = await localStorage.GetItemAsync<List<WorkDay>>(StorageKey) ?? [];
+        if (!auth.IsAuthenticated) { _days = []; return; }
+
+        _days = await supabase.FetchAllAsync();
+
         if (_days.Count == 0)
         {
             _days = GenerateSeedData();
-            await localStorage.SetItemAsync(VersionKey, CurrentVersion);
+            await supabase.UpsertRangeAsync(_days);
         }
-        else
-        {
-            await MigrateAsync();
-        }
+
         _loaded = true;
         await EnsurePublicHolidaysAsync();
-        await SaveAsync();
-    }
-
-    // Called after login to push local data up or pull remote data down.
-    public async Task SyncWithSupabaseAsync()
-    {
-        try
-        {
-            var remote = await supabase.FetchAllAsync();
-            if (remote.Count == 0)
-            {
-                // New Supabase account — upload everything
-                await supabase.UpsertRangeAsync(_days);
-            }
-            else
-            {
-                // Remote is authoritative — pull down and cache
-                _days = remote;
-                await SaveAsync();
-            }
-        }
-        catch { /* stay offline gracefully */ }
     }
 
     private async Task EnsurePublicHolidaysAsync()
     {
         var years = _days.Select(d => d.Date.Year).Append(DateTime.Today.Year).Distinct();
-        bool changed = false;
+        var toUpsert = new List<WorkDay>();
         foreach (var y in years)
         {
             foreach (var h in GetGenevaHolidays(y))
@@ -91,75 +68,19 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
                 var existing = _days.FirstOrDefault(d => d.Date == h.Date);
                 if (existing == null)
                 {
-                    _days.Add(new WorkDay { Date = h.Date, Type = DayType.PublicHoliday });
-                    changed = true;
+                    var day = new WorkDay { Date = h.Date, Type = DayType.PublicHoliday };
+                    _days.Add(day);
+                    toUpsert.Add(day);
                 }
                 else if (existing.Type != DayType.PublicHoliday)
                 {
                     existing.Type = DayType.PublicHoliday;
-                    changed = true;
+                    toUpsert.Add(existing);
                 }
             }
         }
-        if (changed) await SaveAsync();
-    }
-
-    private async Task MigrateAsync()
-    {
-        var version = await localStorage.GetItemAsync<int>(VersionKey);
-        if (version >= CurrentVersion) return;
-
-        if (version < 2)
-        {
-            var vacationDates = new HashSet<DateOnly>
-            {
-                new(2026,2,9),  new(2026,2,10), new(2026,2,11), new(2026,2,12), new(2026,2,13),
-                new(2026,2,16), new(2026,2,17), new(2026,2,18), new(2026,2,19), new(2026,2,20),
-                new(2026,4,7),  new(2026,4,8),  new(2026,4,9),  new(2026,4,10),
-            };
-            foreach (var d in _days.Where(d => vacationDates.Contains(d.Date)))
-                d.Type = DayType.Vacation;
-
-            DateOnly[] julyVacation =
-            [
-                new(2026,7,20), new(2026,7,21), new(2026,7,22), new(2026,7,23), new(2026,7,24),
-                new(2026,7,27), new(2026,7,28), new(2026,7,29), new(2026,7,30),
-            ];
-            foreach (var d in julyVacation.Where(d => !HasDate(d)))
-                _days.Add(new WorkDay { Date = d, Type = DayType.Vacation });
-        }
-
-        // v2→v3: Holiday was renamed to Vacation (same int value 3) — no data change needed.
-        // Any remaining DayType value 3 is already Vacation.
-
-        if (version < 4)
-        {
-            // R&R days: Mar 13 and May 8 already exist as TeleworkFrance — update them.
-            DateOnly[] rnrDays = [new(2026,3,13), new(2026,5,8), new(2026,9,18)];
-            foreach (var date in rnrDays)
-            {
-                var existing = _days.FirstOrDefault(d => d.Date == date);
-                if (existing != null) existing.Type = DayType.RnR;
-                else _days.Add(new WorkDay { Date = date, Type = DayType.RnR });
-            }
-
-            // Company holidays: Good Friday, Juneteenth, National Day observed (Aug 1 = Sat → Jul 31),
-            // Christmas Eve, Ripple PTO week (Dec 26+27 weekend → Dec 28–31)
-            DateOnly[] ptoDays =
-            [
-                new(2026,4,3),  new(2026,6,19), new(2026,7,31),
-                new(2026,12,24), new(2026,12,28), new(2026,12,29), new(2026,12,30), new(2026,12,31)
-            ];
-            foreach (var date in ptoDays)
-            {
-                var existing = _days.FirstOrDefault(d => d.Date == date);
-                if (existing != null) existing.Type = DayType.CompanyHoliday;
-                else _days.Add(new WorkDay { Date = date, Type = DayType.CompanyHoliday });
-            }
-        }
-
-        await SaveAsync();
-        await localStorage.SetItemAsync(VersionKey, CurrentVersion);
+        if (toUpsert.Count > 0)
+            await supabase.UpsertRangeAsync(toUpsert);
     }
 
     // ── Seed ─────────────────────────────────────────────────────────
@@ -261,46 +182,39 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
 
     // ── CRUD ─────────────────────────────────────────────────────────
 
-    private async Task SaveAsync() => await localStorage.SetItemAsync(StorageKey, _days);
-    private static async Task Try(Func<Task> fn) { try { await fn(); } catch { } }
-
     public IEnumerable<WorkDay> GetForYear(int year) =>
         _days.Where(d => d.Date.Year == year).OrderByDescending(d => d.Date);
 
     public IEnumerable<WorkDay> GetForYearByType(int year, DayType type) =>
         _days.Where(d => d.Date.Year == year && d.Type == type).OrderBy(d => d.Date);
 
-    public bool    HasDate(DateOnly date)  => _days.Any(d => d.Date == date);
+    public bool     HasDate(DateOnly date)  => _days.Any(d => d.Date == date);
     public WorkDay? GetByDate(DateOnly date) => _days.FirstOrDefault(d => d.Date == date);
 
     public async Task AddAsync(WorkDay day)
     {
         _days.Add(day);
-        await SaveAsync();
-        if (auth.IsAuthenticated) await Try(() => supabase.UpsertAsync(day));
+        await supabase.UpsertAsync(day);
     }
 
     public async Task AddRangeAsync(IEnumerable<WorkDay> days)
     {
         var list = days.ToList();
         _days.AddRange(list);
-        await SaveAsync();
-        if (auth.IsAuthenticated) await Try(() => supabase.UpsertRangeAsync(list));
+        await supabase.UpsertRangeAsync(list);
     }
 
     public async Task UpdateAsync(WorkDay day)
     {
         var idx = _days.FindIndex(d => d.Id == day.Id);
         if (idx >= 0) _days[idx] = day;
-        await SaveAsync();
-        if (auth.IsAuthenticated) await Try(() => supabase.UpsertAsync(day));
+        await supabase.UpsertAsync(day);
     }
 
     public async Task DeleteAsync(Guid id)
     {
         _days.RemoveAll(d => d.Id == id);
-        await SaveAsync();
-        if (auth.IsAuthenticated) await Try(() => supabase.DeleteAsync(id));
+        await supabase.DeleteAsync(id);
     }
 
     public async Task<int> UpsertRangeAsync(DateOnly from, DateOnly to, DayType type)
@@ -314,12 +228,8 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
             else _days.Add(new WorkDay { Date = d, Type = type });
             count++;
         }
-        await SaveAsync();
-        if (auth.IsAuthenticated)
-        {
-            var changed = _days.Where(d => d.Date >= from && d.Date <= to).ToList();
-            await Try(() => supabase.UpsertRangeAsync(changed));
-        }
+        var changed = _days.Where(d => d.Date >= from && d.Date <= to).ToList();
+        await supabase.UpsertRangeAsync(changed);
         return count;
     }
 
