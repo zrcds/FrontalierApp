@@ -1,0 +1,46 @@
+name: Supabase Keep-Alive
+
+# Free-tier Supabase projects auto-pause after ~7 days of inactivity, which
+# takes this Supabase-only app offline (the app then shows a "can't reach the
+# server" panel). This job runs a lightweight DB query on a schedule to keep
+# the project awake.
+#
+# The URL and anon (publishable) key below are NOT secrets — they are already
+# public: they ship inside the client-side WebAssembly and are committed in
+# FrontalierApp.Shared/Services/SupabaseConfig.cs. Hardcoding them here exposes
+# nothing new. If you ever rotate them, update SupabaseConfig.cs and here.
+#
+# Best-effort, not a guarantee:
+#  - Supabase does not officially promise that synthetic requests reset the
+#    pause timer. This is the widely-used community pattern and works in
+#    practice, but the real safety net is the in-app graceful error panel.
+#  - GitHub disables scheduled workflows after 60 days with no repo activity,
+#    after which this stops running until the repo sees a commit again.
+
+on:
+  schedule:
+    - cron: '0 7 */2 * *'   # every 2 days at 07:00 UTC (comfortably under 7 days)
+  workflow_dispatch: {}       # allow manual runs from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query Supabase to keep the project awake
+        run: |
+          URL="https://jbxesuxfvfpxtwypjuhf.supabase.co"
+          KEY="sb_publishable_Rnu8Gr5_Qq7ok9aRXUNBnw_AnARBmqf"
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+            "$URL/rest/v1/workdays?select=id&limit=1" \
+            -H "apikey: $KEY" || echo 000)
+          echo "HTTP $code"
+          # Require 200: it means PostgREST actually ran a SELECT against
+          # Postgres (real DB activity). A non-200 — including a gateway 4xx
+          # that never touches the DB, or 000 for no connection — means the
+          # keep-alive is not doing its job, so fail loudly and visibly.
+          if [ "$code" = "200" ]; then
+            echo "Supabase responded 200 — a DB query ran, project is awake."
+          else
+            echo "::error::Unexpected status '$code'. Project may be paused/unreachable, or the anon SELECT grant/RLS changed."
+            exit 1
+          fi

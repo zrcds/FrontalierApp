@@ -209,6 +209,14 @@ public static class Strings
         [("en","col_type")]       = "Type",
         [("fr","col_half")]       = "Demi-journée",
         [("en","col_half")]       = "Half day",
+
+        // Connection / backend error
+        [("fr","conn_error_title")] = "Connexion au serveur impossible",
+        [("en","conn_error_title")] = "Can't reach the server",
+        [("fr","conn_error_body")]  = "Le serveur ne répond pas. Votre projet Supabase est peut-être en pause — les projets gratuits se mettent en pause après environ 7 jours d'inactivité. Réactivez-le dans le tableau de bord Supabase, puis réessayez.",
+        [("en","conn_error_body")]  = "The server isn't responding. Your Supabase project may be paused — free projects pause after about 7 days of inactivity. Resume it in the Supabase dashboard, then retry.",
+        [("fr","conn_error_retry")] = "Réessayer",
+        [("en","conn_error_retry")] = "Retry",
     };
 
     // Fix card_ss_sub for French
