@@ -58,7 +58,7 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
 
     private async Task EnsurePublicHolidaysAsync()
     {
-        var years = _days.Select(d => d.Date.Year).Append(DateTime.Today.Year).Distinct();
+        var years = _days.Select(d => d.Date.Year).Append(DateTime.Today.Year).Append(DateTime.Today.Year + 1).Distinct();
         var toUpsert = new List<WorkDay>();
         foreach (var y in years)
         {
@@ -285,6 +285,7 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
     {
         var years = _days.Select(d => d.Date.Year).Distinct().ToList();
         if (!years.Contains(DateTime.Today.Year)) years.Add(DateTime.Today.Year);
+        if (!years.Contains(DateTime.Today.Year + 1)) years.Add(DateTime.Today.Year + 1);
         return years.OrderDescending();
     }
 
