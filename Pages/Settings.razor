@@ -16,6 +16,10 @@
             <option value="cmu">CMU</option>
             <option value="lamal">LAMal</option>
         </select>
+        <div class="form-check form-switch mb-0 ms-3" title="@Lang.T("a1_check_hint")">
+            <input class="form-check-input" type="checkbox" id="a1Check" @bind="hasA1" @bind:after="SaveA1" />
+            <label class="form-check-label small fw-semibold" for="a1Check">@Lang.T("a1_check")</label>
+        </div>
     </div>
 </div>
 
@@ -215,6 +219,7 @@
     private string   addNote       = "";
     private string   addType       = "CompanyHoliday";
     private string   insuranceType = "cmu";
+    private bool     hasA1;
     private bool     _showAddCompany;
     private bool     _showAddVacation;
     private DateTime vacFrom       = DateTime.Today;
@@ -227,10 +232,14 @@
         await Telework.LoadAsync();
         years = Telework.GetAvailableYears();
         insuranceType = (await Telework.GetCmuPreferenceAsync()) ? "cmu" : "lamal";
+        hasA1 = Telework.HasA1Certificate;
     }
 
     private async Task SaveInsurance() =>
         await Telework.SetCmuPreferenceAsync(insuranceType == "cmu");
+
+    private async Task SaveA1() =>
+        await Telework.SetA1CertificateAsync(hasA1);
 
     public void Dispose() => Lang.Changed -= StateHasChanged;
 

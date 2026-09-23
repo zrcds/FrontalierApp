@@ -71,7 +71,8 @@
 @{
     var ms  = MonthStats();
     var ytd = YtdStats();
-    Func<double, string> ssColor = p => p < 20 ? "text-success fw-semibold" : p < 25 ? "text-warning fw-semibold" : "text-danger fw-semibold";
+    var ssRed = Telework.HasA1Certificate ? 50 : 25;
+    Func<double, string> ssColor = p => p < 20 ? "text-success fw-semibold" : p < ssRed ? "text-warning fw-semibold" : "text-danger fw-semibold";
 }
 @if (ytd.TotalWorkedDays > 0)
 {

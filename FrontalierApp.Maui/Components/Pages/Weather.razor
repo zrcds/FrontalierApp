@@ -30,7 +30,7 @@
             <tr><td>@Lang.T("export_tw_ss")</td><td class="text-end">@s.TeleworkSSDays.ToString("0.#")</td></tr>
             <tr>
                 <td>@Lang.T("export_ss_pct")</td>
-                <td class="text-end fw-bold @(s.IsAtFrenchSSRisk ? "text-danger" : s.NeedsA1Certificate ? "text-warning" : "text-success")">
+                <td class="text-end fw-bold @(s.IsAtFrenchSSRisk ? "text-danger" : s.NeedsA1Certificate || s.IsCoveredByA1 ? "text-warning" : "text-success")">
                     @s.SocialSecurityPercent.ToString("0.0")%
                 </td>
             </tr>

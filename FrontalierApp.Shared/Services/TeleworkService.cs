@@ -14,13 +14,18 @@ public class TeleworkStats
     public double TeleworkTaxDays { get; set; }
     public int MissionDays { get; set; }
 
+    // Employer holds an A1 under the cross-border telework framework agreement:
+    // Swiss social security then extends up to 50% instead of 25%.
+    public bool HasA1Certificate { get; set; }
+
     public double SocialSecurityPercent => TotalWorkedDays > 0 ? TeleworkSSDays / TotalWorkedDays * 100 : 0;
     public double TaxPercent => TotalWorkedDays > 0 ? (TeleworkTaxDays + MissionDays) / TotalWorkedDays * 100 : 0;
     public double TeleworkPlusMissionTaxDays => TeleworkTaxDays + MissionDays;
 
     public bool IsApproachingCompanySSLimit => SocialSecurityPercent is >= 18 and < 20;
     public bool IsOverCompanySSLimit        => SocialSecurityPercent is > 20 and < 25;
-    public bool NeedsA1Certificate          => SocialSecurityPercent is >= 25 and < 50;
+    public bool NeedsA1Certificate          => !HasA1Certificate && SocialSecurityPercent is >= 25 and < 50;
+    public bool IsCoveredByA1               =>  HasA1Certificate && SocialSecurityPercent is >= 25 and < 50;
     public bool IsAtFrenchSSRisk            => SocialSecurityPercent >= 50;
     public bool IsApproachingSSLimit => IsApproachingCompanySSLimit;
     public bool IsAtTaxRisk => TaxPercent >= 40;
@@ -32,8 +37,12 @@ public class TeleworkStats
 public class TeleworkService(IStorageService localStorage, AuthService auth, SupabaseStorageService supabase)
 {
     private const string CmuKey = "cmu_preference";
+    private const string A1Key  = "a1_certificate";
     private List<WorkDay> _days = [];
     private bool _loaded;
+    private bool _hasA1;
+
+    public bool HasA1Certificate => _hasA1;
 
     public void Reset() => _loaded = false;
 
@@ -43,6 +52,8 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
     {
         if (_loaded) return;
         if (!auth.IsAuthenticated) { _days = []; return; }
+
+        _hasA1 = await localStorage.GetItemAsync<bool>(A1Key);
 
         _days = await supabase.FetchAllAsync();
 
@@ -254,7 +265,7 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
         {
             Year = year, TotalWorkedDays = totalWorkedDays,
             TeleworkSSDays = teleworkSSDays, TeleworkTaxDays = teleworkTaxDays,
-            MissionDays = missionDays
+            MissionDays = missionDays, HasA1Certificate = _hasA1
         };
     }
 
@@ -363,6 +374,12 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
 
     public async Task<bool> GetCmuPreferenceAsync()         => await localStorage.GetItemAsync<bool>(CmuKey);
     public async Task       SetCmuPreferenceAsync(bool v)   => await localStorage.SetItemAsync(CmuKey, v);
+
+    public async Task SetA1CertificateAsync(bool v)
+    {
+        _hasA1 = v;
+        await localStorage.SetItemAsync(A1Key, v);
+    }
 
     // ── Missing days ──────────────────────────────────────────────────
 
