@@ -293,7 +293,7 @@
     private string SsTextClass  => stats!.IsAtFrenchSSRisk ? "text-danger"   : stats.NeedsA1Certificate ? "text-danger"    : stats.IsCoveredByA1 || stats.IsOverCompanySSLimit ? "text-warning"   : "text-success";
     private string SsBarClass   => stats!.IsAtFrenchSSRisk ? "bg-danger"     : stats.NeedsA1Certificate ? "bg-danger"      : stats.IsCoveredByA1 || stats.IsOverCompanySSLimit ? "bg-warning"     : "bg-success";
     private string SsBadgeClass => stats!.IsAtFrenchSSRisk ? "bg-danger"     : stats.NeedsA1Certificate ? "bg-danger"      : stats.IsCoveredByA1 || stats.IsOverCompanySSLimit ? "bg-warning text-dark" : "bg-success";
-    private string SsStatusText => stats!.IsAtFrenchSSRisk ? Lang.T("badge_urssaf") : stats.NeedsA1Certificate ? Lang.T("badge_a1") : stats.IsCoveredByA1 ? Lang.T("badge_a1_ok") : stats.IsOverCompanySSLimit ? "Over Ripple limit" : stats.IsApproachingCompanySSLimit ? Lang.T("badge_approach25") : Lang.T("badge_ss_ok");
+    private string SsStatusText => stats!.IsAtFrenchSSRisk ? Lang.T("badge_urssaf") : stats.NeedsA1Certificate ? Lang.T("badge_a1") : stats.IsCoveredByA1 ? Lang.T("badge_a1_ok") : stats.IsOverCompanySSLimit ? "Over Ripple limit" : stats.IsApproachingCompanySSLimit ? Lang.T("badge_approach20") : Lang.T("badge_ss_ok");
 
     private string PlannedSsTextClass => plannedStats == null ? "" :
         plannedStats.SocialSecurityPercent >= 50 ? "text-danger" :
