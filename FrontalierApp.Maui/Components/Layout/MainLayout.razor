@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @inject LangService Lang
 @inject AuthService Auth
+@inject TeleworkService Telework
 @inject NavigationManager Nav
 @implements IDisposable
 
@@ -25,36 +26,97 @@
                 }
                 else
                 {
-                    <a href="/login" class="text-muted">☁ Sign in to sync</a>
+                    <a href="login" class="text-muted">☁ Sign in to sync</a>
                 }
             </div>
         </div>
         <article class="content px-4">
-            @Body
+            @if (_ready)
+            {
+                @Body
+            }
+            else if (_loadFailed)
+            {
+                <div class="alert alert-warning mt-5 mx-auto" style="max-width:560px;" role="alert">
+                    <h4 class="alert-heading h5">@Lang.T("conn_error_title")</h4>
+                    <p class="mb-3">@Lang.T("conn_error_body")</p>
+                    <button class="btn btn-primary btn-sm" @onclick="RetryLoad" disabled="@_retrying">
+                        @if (_retrying)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        @Lang.T("conn_error_retry")
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="text-center text-muted mt-5">Loading…</div>
+            }
         </article>
     </main>
 </div>
 
 @code {
+    private bool _ready;
+    private bool _loadFailed;
+    private bool _retrying;
+
     protected override async Task OnInitializedAsync()
     {
         await Lang.InitAsync();
         await Auth.InitAsync();
+        await TryLoadAsync();
         Lang.Changed += StateHasChanged;
-        Auth.Changed += StateHasChanged;
+        Auth.Changed += OnAuthChanged;
+    }
+
+    // Loads data, degrading gracefully when the backend is unreachable
+    // (e.g. a paused Supabase project) instead of letting the exception
+    // escape OnInitializedAsync and trigger Blazor's fatal error banner.
+    private async Task TryLoadAsync()
+    {
+        try
+        {
+            await Telework.LoadAsync();
+            _ready = true;
+            _loadFailed = false;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _ready = false;
+            _loadFailed = true;
+        }
+    }
+
+    private async void OnAuthChanged()
+    {
+        Telework.Reset();
+        _ready = false;
+        await TryLoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task RetryLoad()
+    {
+        _retrying = true;
+        Telework.Reset();
+        await TryLoadAsync();
+        _retrying = false;
     }
 
     private async Task SetLang(string lang) => await Lang.SetAsync(lang);
 
     private async Task SignOut()
     {
+        Telework.Reset();
         await Auth.SignOutAsync();
-        Nav.NavigateTo("/");
+        Nav.NavigateTo("login");
     }
 
     public void Dispose()
     {
         Lang.Changed -= StateHasChanged;
-        Auth.Changed -= StateHasChanged;
+        Auth.Changed -= OnAuthChanged;
     }
 }

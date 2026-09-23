@@ -89,15 +89,15 @@
 
 @* Legend *@
 <div class="d-flex gap-2 flex-wrap mb-3 small">
-    <span class="legend-chip cal-ch">🇨🇭 @Lang.T("lbl_ch")</span>
+    <span class="legend-chip cal-ch">🏢 @Lang.T("lbl_ch")</span>
     <span class="legend-chip cal-tw">🏠 @Lang.T("lbl_tw")</span>
     <span class="legend-chip cal-mis">✈️ @Lang.T("lbl_mis")</span>
     <span class="legend-chip cal-hol">🌴 @Lang.T("lbl_hol")</span>
     <span class="legend-chip cal-ph">🏛️ @Lang.T("lbl_ph")</span>
-    <span class="legend-chip cal-company">🏢 @Lang.T("lbl_company")</span>
+    <span class="legend-chip cal-company">🎉 @Lang.T("lbl_company")</span>
     <span class="legend-chip cal-regional">🗺️ @Lang.T("lbl_regional")</span>
-    <span class="legend-chip cal-rnr">💆 @Lang.T("lbl_rnr")</span>
-    <span class="legend-chip cal-sick">🤒 @Lang.T("lbl_sick")</span>
+    <span class="legend-chip cal-rnr">🧘 @Lang.T("lbl_rnr")</span>
+    <span class="legend-chip cal-sick">➕ @Lang.T("lbl_sick")</span>
 </div>
 
 @* Calendar grid *@
@@ -327,15 +327,15 @@
 
     private static string DayIcon(DayType t) => t switch
     {
-        DayType.Switzerland     => "🇨🇭",
+        DayType.Switzerland     => "🏢",
         DayType.TeleworkFrance  => "🏠",
         DayType.MissionAbroad   => "✈️",
         DayType.Vacation        => "🌴",
-        DayType.SickLeave       => "🤒",
+        DayType.SickLeave       => "➕",
         DayType.PublicHoliday   => "🏛️",
-        DayType.CompanyHoliday  => "🏢",
+        DayType.CompanyHoliday  => "🎉",
         DayType.RegionalHoliday => "🗺️",
-        DayType.RnR             => "💆",
+        DayType.RnR             => "🧘",
         _ => ""
     };
 
