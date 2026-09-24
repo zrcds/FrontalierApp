@@ -71,8 +71,9 @@
 @{
     var ms  = MonthStats();
     var ytd = YtdStats();
-    var ssRed = Telework.HasA1Certificate ? 50 : 25;
-    Func<double, string> ssColor = p => p < 20 ? "text-success fw-semibold" : p < ssRed ? "text-warning fw-semibold" : "text-danger fw-semibold";
+    var ssAmber = ytd.CompanySSLimit;
+    var ssRed   = ytd.LegalSSLimit;
+    Func<double, string> ssColor = p => p <= ssAmber ? "text-success fw-semibold" : p < ssRed ? "text-warning fw-semibold" : "text-danger fw-semibold";
 }
 @if (ytd.TotalWorkedDays > 0)
 {
@@ -351,12 +352,13 @@
         return Stats(days);
     }
 
-    private static TeleworkStats Stats(List<WorkDay> days) => new()
+    private TeleworkStats Stats(List<WorkDay> days) => new()
     {
         TotalWorkedDays = days.Where(d => d.Type is DayType.Switzerland or DayType.TeleworkFrance or DayType.MissionAbroad).Sum(d => d.IsHalfDay ? 0.5 : 1.0),
         TeleworkSSDays  = days.Where(d => d.Type == DayType.TeleworkFrance).Sum(d => d.IsHalfDay ? 0.5 : 1.0),
         TeleworkTaxDays = days.Count(d => d.Type == DayType.TeleworkFrance),
         MissionDays     = days.Count(d => d.Type == DayType.MissionAbroad),
+        HasA1Certificate = Telework.HasA1Certificate,
     };
 
     private static string[] SplitCsvLine(string line)

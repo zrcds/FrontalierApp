@@ -82,22 +82,16 @@
             @if (hasCmu) { <div class="mt-1"><strong>@Lang.T("alert_cmu")</strong></div> }
         </div>
     }
-    else if (stats.IsCoveredByA1)
-    {
-        <div class="alert alert-info">
-            <strong>@Lang.T("alert_a1_ok_title")</strong> @Lang.T("alert_a1_ok_body")
-        </div>
-    }
     else if (stats.IsOverCompanySSLimit)
     {
-        var alertClass = proj?.EndOfYearPct >= 21 ? "alert-danger" : "alert-warning";
+        var alertClass = proj?.EndOfYearPct >= stats.CompanySSLimit + 1 ? "alert-danger" : "alert-warning";
         <div class="alert @alertClass">
             <strong>⚠ Ripple limit exceeded (@stats.SocialSecurityPercent.ToString("0.0")%).</strong>
             @if (proj != null)
             {
                 @if (proj.Recoverable == true)
                 {
-                    <span> Back under 20% by <strong>@proj.RecoveryDate!.Value.ToString("MMM d")</strong> (~@proj.WeeksLeft week@(proj.WeeksLeft == 1 ? "" : "s") at Tue–Fri pace).</span>
+                    <span> Back under @stats.CompanySSLimit% by <strong>@proj.RecoveryDate!.Value.ToString("MMM d")</strong> (~@proj.WeeksLeft week@(proj.WeeksLeft == 1 ? "" : "s") at Tue–Fri pace).</span>
                 }
                 else
                 {
@@ -108,7 +102,13 @@
     }
     else if (stats.IsApproachingCompanySSLimit)
     {
-        <div class="alert alert-info"><strong>@Lang.T("alert_ss_approach")</strong></div>
+        <div class="alert alert-info"><strong>@Lang.T("alert_ss_approach", stats.CompanySSLimit)</strong></div>
+    }
+    else if (stats.IsCoveredByA1)
+    {
+        <div class="alert alert-info">
+            <strong>@Lang.T("alert_a1_ok_title")</strong> @Lang.T("alert_a1_ok_body")
+        </div>
     }
 
     @if (stats.IsAtTaxRisk)
@@ -156,8 +156,16 @@
                     </div>
                     <div class="d-flex justify-content-between small mb-2">
                         <span class="text-muted">0%</span>
-                        <span class="text-warning fw-semibold">20% (Ripple)</span>
-                        <span class="@(stats.HasA1Certificate ? "text-muted" : "text-warning") fw-semibold">25% (A1@(stats.HasA1Certificate ? " ✓" : ""))</span>
+                        @if (stats.HasA1Certificate)
+                        {
+                            <span class="text-muted fw-semibold">25% (A1 ✓)</span>
+                            <span class="text-warning fw-semibold">40% (Ripple)</span>
+                        }
+                        else
+                        {
+                            <span class="text-warning fw-semibold">20% (Ripple)</span>
+                            <span class="text-warning fw-semibold">25% (A1)</span>
+                        }
                         <span class="text-danger fw-semibold">50%</span>
                     </div>
                     <p class="small mb-1 text-muted">@Lang.T("card_ss_sub", stats.TeleworkSSDays.ToString("0.#"), stats.TotalWorkedDays.ToString("0.#"))</p>
@@ -289,17 +297,15 @@
     private string Pct(double val, double maxVal = 100.0) =>
         Math.Min(val / maxVal * 100.0, 100.0).ToString("0.0", CultureInfo.InvariantCulture);
 
-    private string SsCardClass  => stats!.IsAtFrenchSSRisk ? "border-danger" : stats.NeedsA1Certificate ? "border-danger"  : stats.IsCoveredByA1 || stats.IsOverCompanySSLimit ? "border-warning" : "border-success";
-    private string SsTextClass  => stats!.IsAtFrenchSSRisk ? "text-danger"   : stats.NeedsA1Certificate ? "text-danger"    : stats.IsCoveredByA1 || stats.IsOverCompanySSLimit ? "text-warning"   : "text-success";
-    private string SsBarClass   => stats!.IsAtFrenchSSRisk ? "bg-danger"     : stats.NeedsA1Certificate ? "bg-danger"      : stats.IsCoveredByA1 || stats.IsOverCompanySSLimit ? "bg-warning"     : "bg-success";
-    private string SsBadgeClass => stats!.IsAtFrenchSSRisk ? "bg-danger"     : stats.NeedsA1Certificate ? "bg-danger"      : stats.IsCoveredByA1 || stats.IsOverCompanySSLimit ? "bg-warning text-dark" : "bg-success";
-    private string SsStatusText => stats!.IsAtFrenchSSRisk ? Lang.T("badge_urssaf") : stats.NeedsA1Certificate ? Lang.T("badge_a1") : stats.IsCoveredByA1 ? Lang.T("badge_a1_ok") : stats.IsOverCompanySSLimit ? "Over Ripple limit" : stats.IsApproachingCompanySSLimit ? Lang.T("badge_approach20") : Lang.T("badge_ss_ok");
+    private string SsCardClass  => stats!.IsAtFrenchSSRisk ? "border-danger" : stats.NeedsA1Certificate ? "border-danger"  : stats.IsOverCompanySSLimit ? "border-warning" : "border-success";
+    private string SsTextClass  => stats!.IsAtFrenchSSRisk ? "text-danger"   : stats.NeedsA1Certificate ? "text-danger"    : stats.IsOverCompanySSLimit ? "text-warning"   : "text-success";
+    private string SsBarClass   => stats!.IsAtFrenchSSRisk ? "bg-danger"     : stats.NeedsA1Certificate ? "bg-danger"      : stats.IsOverCompanySSLimit ? "bg-warning"     : "bg-success";
+    private string SsBadgeClass => stats!.IsAtFrenchSSRisk ? "bg-danger"     : stats.NeedsA1Certificate ? "bg-danger"      : stats.IsOverCompanySSLimit ? "bg-warning text-dark" : "bg-success";
+    private string SsStatusText => stats!.IsAtFrenchSSRisk ? Lang.T("badge_urssaf") : stats.NeedsA1Certificate ? Lang.T("badge_a1") : stats.IsOverCompanySSLimit ? "Over Ripple limit" : stats.IsApproachingCompanySSLimit ? Lang.T("badge_approach", stats.CompanySSLimit) : stats.IsCoveredByA1 ? Lang.T("badge_a1_ok") : Lang.T("badge_ss_ok");
 
     private string PlannedSsTextClass => plannedStats == null ? "" :
-        plannedStats.SocialSecurityPercent >= 50 ? "text-danger" :
-        plannedStats.NeedsA1Certificate          ? "text-danger" :
-        plannedStats.SocialSecurityPercent > 20  ? "text-warning" :
-        plannedStats.SocialSecurityPercent >= 18 ? "text-warning" :
+        plannedStats.IsAtFrenchSSRisk || plannedStats.NeedsA1Certificate                ? "text-danger" :
+        plannedStats.IsOverCompanySSLimit || plannedStats.IsApproachingCompanySSLimit   ? "text-warning" :
         "text-success";
 
     private string TaxCardClass  => stats!.IsAtTaxRisk ? "border-danger" : stats.IsApproachingTaxLimit ? "border-warning" : "border-success";
@@ -337,7 +343,7 @@
             if (type == DayType.TeleworkFrance)
                 tw += days;
 
-            if (worked > 0 && tw / worked * 100 <= 20)
+            if (worked > 0 && tw / worked * 100 <= stats.CompanySSLimit)
             {
                 int weeks = (int)Math.Ceiling((d.DayNumber - today.DayNumber) / 7.0);
                 return new(d, true, weeks, 0);

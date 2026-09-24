@@ -15,15 +15,19 @@ public class TeleworkStats
     public int MissionDays { get; set; }
 
     // Employer holds an A1 under the cross-border telework framework agreement:
-    // Swiss social security then extends up to 50% instead of 25%.
+    // Swiss social security then extends up to 50% instead of 25%, and Ripple's
+    // own telework limit rises from 20% to 40%.
     public bool HasA1Certificate { get; set; }
+
+    public double CompanySSLimit => HasA1Certificate ? 40 : 20;
+    public double LegalSSLimit   => HasA1Certificate ? 50 : 25;
 
     public double SocialSecurityPercent => TotalWorkedDays > 0 ? TeleworkSSDays / TotalWorkedDays * 100 : 0;
     public double TaxPercent => TotalWorkedDays > 0 ? (TeleworkTaxDays + MissionDays) / TotalWorkedDays * 100 : 0;
     public double TeleworkPlusMissionTaxDays => TeleworkTaxDays + MissionDays;
 
-    public bool IsApproachingCompanySSLimit => SocialSecurityPercent is >= 18 and < 20;
-    public bool IsOverCompanySSLimit        => SocialSecurityPercent is > 20 and < 25;
+    public bool IsApproachingCompanySSLimit => SocialSecurityPercent >= CompanySSLimit - 2 && SocialSecurityPercent <= CompanySSLimit;
+    public bool IsOverCompanySSLimit        => SocialSecurityPercent >  CompanySSLimit     && SocialSecurityPercent <  LegalSSLimit;
     public bool NeedsA1Certificate          => !HasA1Certificate && SocialSecurityPercent is >= 25 and < 50;
     public bool IsCoveredByA1               =>  HasA1Certificate && SocialSecurityPercent is >= 25 and < 50;
     public bool IsAtFrenchSSRisk            => SocialSecurityPercent >= 50;
