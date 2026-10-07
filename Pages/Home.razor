@@ -91,11 +91,11 @@
             {
                 @if (proj.Recoverable == true)
                 {
-                    <span> Back under @stats.CompanySSLimit% by <strong>@proj.RecoveryDate!.Value.ToString("MMM d")</strong> (~@proj.WeeksLeft week@(proj.WeeksLeft == 1 ? "" : "s") at Tue–Fri pace).</span>
+                    <span> Back under @stats.CompanySSLimit% by <strong>@proj.RecoveryDate!.Value.ToString("MMM d")</strong> (~@proj.WeeksLeft week@(proj.WeeksLeft == 1 ? "" : "s") at your usual week).</span>
                 }
                 else
                 {
-                    <span> Projected year-end: ~<strong>@proj.EndOfYearPct.ToString("0.0")%</strong> at Tue–Fri pace.</span>
+                    <span> Projected year-end: ~<strong>@proj.EndOfYearPct.ToString("0.0")%</strong> at your usual week.</span>
                 }
             }
         </div>
@@ -108,6 +108,30 @@
     {
         <div class="alert alert-info">
             <strong>@Lang.T("alert_a1_ok_title")</strong> @Lang.T("alert_a1_ok_body")
+        </div>
+    }
+
+    @if (yearEnd != null)
+    {
+        <div class="alert @YearEndClass">
+            <strong>@Lang.T("ye_title", yearEnd.Limit, 100 - yearEnd.Limit)</strong>
+            @if (yearEnd.IsOver)
+            {
+                <span>@Lang.T("ye_over", yearEnd.AllOfficePercent.ToString("0.0"), yearEnd.OfficeDaysNeeded)</span>
+            }
+            else if (yearEnd.IsTight)
+            {
+                <span>@Lang.T("ye_tight", yearEnd.UsualWeekPercent.ToString("0.0"), yearEnd.UsualTeleworkDaysToSwap)</span>
+            }
+            else
+            {
+                <span>@Lang.T("ye_ok", yearEnd.UsualWeekPercent.ToString("0.0"), yearEnd.SpareTeleworkDays.ToString("0.#"))</span>
+            }
+            <div class="small mt-1">@Lang.T("ye_basis", yearEnd.UnloggedDays, Lang.DayList(Telework.TeleworkWeekdays), yearEnd.FutureRnRDays.ToString("0.#"), yearEnd.FutureVacationDays.ToString("0.#"))</div>
+            @if (!yearEnd.DecemberRnRLogged)
+            {
+                <div class="small fw-semibold mt-1">@Lang.T("ye_no_rnr")</div>
+            }
         </div>
     }
 
@@ -147,7 +171,7 @@
                         {
                             <span class="@PlannedSsTextClass fw-semibold" style="font-size:1.1rem;" title="Planned rate as of @plannedAsOf!.Value.ToString("MMM d")">
                                 → @plannedStats.SocialSecurityPercent.ToString("0.0")%
-                                <span class="text-muted fw-normal" style="font-size:0.75rem;">planned @plannedAsOf!.Value.ToString("MMM d")</span>
+                                <span class="text-muted fw-normal" style="font-size:0.75rem;">logged days to @plannedAsOf!.Value.ToString("MMM d")</span>
                             </span>
                         }
                     </div>
@@ -268,7 +292,12 @@
         var full = Telework.ComputeStats(selectedYear);
         plannedAsOf = Telework.GetLastFutureLoggedWorkday(selectedYear);
         plannedStats = plannedAsOf.HasValue ? full : null;
+        yearEnd = selectedYear == today.Year ? Telework.ProjectYearEnd(selectedYear) : null;
     }
+
+    private YearEndProjection? yearEnd;
+
+    private string YearEndClass => yearEnd!.IsOver ? "alert-danger" : yearEnd.IsTight ? "alert-warning" : "alert-success";
 
     // ── Missing days modal ────────────────────────────────────────────
 
@@ -331,13 +360,16 @@
         double tw     = stats.TeleworkSSDays;
         double worked = stats.TotalWorkedDays;
 
+        // Run to the end of the year: the recovery date is when the rate drops under the limit
+        // for good, so a later R&R block that pushes it back over cancels an earlier dip.
+        DateOnly? recovered = null;
         for (var d = today.AddDays(1); d <= end; d = d.AddDays(1))
         {
             if (d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) continue;
             var existing = Telework.GetByDate(d);
             double days = existing?.IsHalfDay == true ? 0.5 : 1.0;
             var type = existing?.Type
-                ?? (d.DayOfWeek == DayOfWeek.Monday ? DayType.TeleworkFrance : DayType.Switzerland);
+                ?? (Telework.TeleworkWeekdays.Contains(d.DayOfWeek) ? DayType.TeleworkFrance : DayType.Switzerland);
 
             if (type.IsWorkedDay())
                 worked += days;
@@ -345,10 +377,15 @@
                 tw += days;
 
             if (worked > 0 && tw / worked * 100 <= stats.CompanySSLimit)
-            {
-                int weeks = (int)Math.Ceiling((d.DayNumber - today.DayNumber) / 7.0);
-                return new(d, true, weeks, 0);
-            }
+                recovered ??= d;
+            else
+                recovered = null;
+        }
+
+        if (recovered is { } r)
+        {
+            int weeks = (int)Math.Ceiling((r.DayNumber - today.DayNumber) / 7.0);
+            return new(r, true, weeks, 0);
         }
 
         double endPct = worked > 0 ? tw / worked * 100 : 0;

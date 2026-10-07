@@ -6,6 +6,39 @@ namespace FrontalierApp.Services;
 public record VacationPeriod(DateOnly Start, DateOnly End, int Days);
 public record PublicHolidayInfo(DateOnly Date, string NameFr, string NameEn);
 
+// Where the year ends. Logged days, past and future (R&R, vacation, planned telework), are
+// taken as they are, so the year-end R&R block only counts once it has been entered.
+// Unlogged workdays from today on follow the user's usual week: UnloggedTeleworkDays of
+// them fall on usual telework weekdays, the rest are office days.
+public record YearEndProjection(
+    double TeleworkDays, double WorkedDays, double Limit,
+    int UnloggedDays, int UnloggedTeleworkDays,
+    double FutureRnRDays, double FutureVacationDays, bool DecemberRnRLogged)
+{
+    // Turning an unlogged office day into telework adds 1 to the numerator and nothing to
+    // the total, so each budget is a count of telework days.
+    private double AllOfficeBudget => Limit / 100 * WorkedDays - TeleworkDays;
+    private double UsualWeekBudget => AllOfficeBudget - UnloggedTeleworkDays;
+
+    public double UsualWeekPercent =>
+        WorkedDays > 0 ? (TeleworkDays + UnloggedTeleworkDays) / WorkedDays * 100 : 0;
+    public double AllOfficePercent => WorkedDays > 0 ? TeleworkDays / WorkedDays * 100 : 0;
+
+    // Over even with every remaining day in the office: only swapping planned telework or
+    // R&R days for office days can fix it.
+    public bool IsOver  => AllOfficeBudget < 0;
+    public int  OfficeDaysNeeded => IsOver ? CeilDays(-AllOfficeBudget) : 0;
+
+    // Over at the usual week, but fixable by going in on some usual telework days.
+    public bool IsTight => !IsOver && UsualWeekBudget < 0;
+    public int  UsualTeleworkDaysToSwap => IsTight ? CeilDays(-UsualWeekBudget) : 0;
+
+    // Extra telework days available on top of the usual week.
+    public double SpareTeleworkDays => Math.Max(0, Math.Floor(UsualWeekBudget * 2) / 2);
+
+    private static int CeilDays(double days) => (int)Math.Ceiling(days - 1e-9);
+}
+
 public class TeleworkStats
 {
     public int Year { get; set; }
@@ -42,11 +75,18 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
 {
     private const string CmuKey = "cmu_preference";
     private const string A1Key  = "a1_certificate";
+    private const string TeleworkWeekdaysKey = "telework_weekdays";
+    private static readonly DayOfWeek[] DefaultTeleworkWeekdays = [DayOfWeek.Monday, DayOfWeek.Friday];
     private List<WorkDay> _days = [];
     private bool _loaded;
     private bool _hasA1;
+    private HashSet<DayOfWeek> _teleworkWeekdays = [.. DefaultTeleworkWeekdays];
 
     public bool HasA1Certificate => _hasA1;
+
+    // The user's usual week, used to project unlogged future days: these weekdays are
+    // assumed to be telework, the others office.
+    public IReadOnlySet<DayOfWeek> TeleworkWeekdays => _teleworkWeekdays;
 
     public void Reset() => _loaded = false;
 
@@ -58,6 +98,8 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
         if (!auth.IsAuthenticated) { _days = []; return; }
 
         _hasA1 = await localStorage.GetItemAsync<bool>(A1Key);
+        var weekdays = await localStorage.GetItemAsync<int[]>(TeleworkWeekdaysKey);
+        _teleworkWeekdays = weekdays == null ? [.. DefaultTeleworkWeekdays] : [.. weekdays.Select(d => (DayOfWeek)d)];
 
         _days = await supabase.FetchAllAsync();
 
@@ -273,6 +315,33 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
         };
     }
 
+    public YearEndProjection ProjectYearEnd(int year)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var days  = _days.Where(d => d.Date.Year == year).ToList();
+        static double Weight(WorkDay d) => d.IsHalfDay ? 0.5 : 1.0;
+
+        double telework = days.Where(d => d.Type.CountsAsTelework()).Sum(Weight);
+        double worked   = days.Where(d => d.Type.IsWorkedDay()).Sum(Weight);
+
+        int unlogged = 0, unloggedTelework = 0;
+        for (var d = today; d <= new DateOnly(year, 12, 31); d = d.AddDays(1))
+        {
+            if (d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday || HasDate(d)) continue;
+            unlogged++;
+            if (_teleworkWeekdays.Contains(d.DayOfWeek)) unloggedTelework++;
+        }
+        worked += unlogged;
+
+        var future = days.Where(d => d.Date >= today).ToList();
+        return new YearEndProjection(
+            telework, worked, new TeleworkStats { HasA1Certificate = _hasA1 }.CompanySSLimit,
+            unlogged, unloggedTelework,
+            FutureRnRDays:      future.Where(d => d.Type == DayType.RnR).Sum(Weight),
+            FutureVacationDays: future.Where(d => d.Type == DayType.Vacation).Sum(Weight),
+            DecemberRnRLogged:  days.Any(d => d.Date.Month == 12 && d.Type == DayType.RnR));
+    }
+
     public int GetRemainingUnloggedWorkdays(int year)
     {
         var start = DateOnly.FromDateTime(DateTime.Today).AddDays(1);
@@ -383,6 +452,12 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
     {
         _hasA1 = v;
         await localStorage.SetItemAsync(A1Key, v);
+    }
+
+    public async Task SetTeleworkWeekdaysAsync(IEnumerable<DayOfWeek> weekdays)
+    {
+        _teleworkWeekdays = [.. weekdays];
+        await localStorage.SetItemAsync(TeleworkWeekdaysKey, _teleworkWeekdays.Select(d => (int)d).Order().ToArray());
     }
 
     // ── Missing days ──────────────────────────────────────────────────

@@ -27,4 +27,16 @@ public class LangService(IStorageService localStorage)
 
     public string T(string key) => Strings.Get(_lang, key);
     public string T(string key, params object[] args) => string.Format(T(key), args);
+
+    private static readonly string[] DaysEn = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    private static readonly string[] DaysFr = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
+
+    public string DayShort(DayOfWeek day) => (_lang == "fr" ? DaysFr : DaysEn)[(int)day];
+
+    // Monday-first list such as "Mon, Fri", or "—" when empty.
+    public string DayList(IEnumerable<DayOfWeek> days)
+    {
+        var ordered = days.OrderBy(d => ((int)d + 6) % 7).Select(DayShort).ToList();
+        return ordered.Count == 0 ? "—" : string.Join(", ", ordered);
+    }
 }
