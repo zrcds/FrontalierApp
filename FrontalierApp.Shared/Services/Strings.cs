@@ -116,11 +116,11 @@ public static class Strings
         [("fr","card_ss_title")]   = "Sécurité sociale",
         [("en","card_ss_title")]   = "Social Security",
         [("fr","card_ss_sub")]     = "{0} days telework / {1} days worked",  // overridden below
-        [("en","card_ss_sub")]     = "{0} days telework / {1} days worked",
+        [("en","card_ss_sub")]     = "{0} days telework + R&R / {1} days worked",
         [("fr","card_tax_title")]  = "Fiscal (imposition)",
         [("en","card_tax_title")]  = "Tax (income)",
-        [("fr","card_tax_sub")]    = "{0} j (télétravail + missions) / {1} j travaillés",
-        [("en","card_tax_sub")]    = "{0} days (telework + missions) / {1} days worked",
+        [("fr","card_tax_sub")]    = "{0} j (télétravail + R&R + missions) / {1} j travaillés",
+        [("en","card_tax_sub")]    = "{0} days (telework + R&R + missions) / {1} days worked",
         [("fr","card_mis_title")]  = "Missions hors Suisse",
         [("en","card_mis_title")]  = "Missions outside Switzerland",
         [("fr","card_mis_note")]   = "Ces jours comptent également dans le quota fiscal de 40%.",
@@ -232,7 +232,7 @@ public static class Strings
     // Fix card_ss_sub for French
     static Strings()
     {
-        _t[("fr", "card_ss_sub")] = "{0} j télétravail / {1} j travaillés";
+        _t[("fr", "card_ss_sub")] = "{0} j télétravail + R&R / {1} j travaillés";
     }
 
     public static string Get(string lang, string key) =>

@@ -221,6 +221,7 @@
             <div class="row text-center g-2">
                 <div class="col"><div class="fs-3 fw-bold text-primary">@ChDays.ToString("0.#")</div><div class="small text-muted">@Lang.T("lbl_ch")</div></div>
                 <div class="col"><div class="fs-3 fw-bold text-info">@TwDays.ToString("0.#")</div><div class="small text-muted">@Lang.T("lbl_tw")</div></div>
+                <div class="col"><div class="fs-3 fw-bold text-info">@RnrDays.ToString("0.#")</div><div class="small text-muted">@Lang.T("lbl_rnr")</div></div>
                 <div class="col"><div class="fs-3 fw-bold text-warning">@MisDays</div><div class="small text-muted">@Lang.T("lbl_mis")</div></div>
                 <div class="col"><div class="fs-3 fw-bold text-secondary">@HolDays</div><div class="small text-muted">@Lang.T("lbl_hol")</div></div>
                 <div class="col"><div class="fs-3 fw-bold text-secondary">@SickDays</div><div class="small text-muted">@Lang.T("lbl_sick")</div></div>
@@ -340,7 +341,7 @@
 
             if (type.IsWorkedDay())
                 worked += days;
-            if (type == DayType.TeleworkFrance)
+            if (type.CountsAsTelework())
                 tw += days;
 
             if (worked > 0 && tw / worked * 100 <= stats.CompanySSLimit)
@@ -357,6 +358,7 @@
     private double ChDays   => Telework.GetForYear(selectedYear).Where(d => d.Type == DayType.Switzerland).Sum(d => d.IsHalfDay ? 0.5 : 1.0);
     private double TwDays   => Telework.GetForYear(selectedYear).Where(d => d.Type == DayType.TeleworkFrance).Sum(d => d.IsHalfDay ? 0.5 : 1.0);
     private int    MisDays  => Telework.GetForYear(selectedYear).Count(d => d.Type == DayType.MissionAbroad);
-    private int    HolDays  => Telework.GetForYear(selectedYear).Count(d => d.Type is DayType.Vacation or DayType.PublicHoliday or DayType.CompanyHoliday or DayType.RegionalHoliday or DayType.RnR);
+    private int    HolDays  => Telework.GetForYear(selectedYear).Count(d => d.Type is DayType.Vacation or DayType.PublicHoliday or DayType.CompanyHoliday or DayType.RegionalHoliday);
+    private double RnrDays  => Telework.GetForYear(selectedYear).Where(d => d.Type == DayType.RnR).Sum(d => d.IsHalfDay ? 0.5 : 1.0);
     private int    SickDays => Telework.GetForYear(selectedYear).Count(d => d.Type == DayType.SickLeave);
 }

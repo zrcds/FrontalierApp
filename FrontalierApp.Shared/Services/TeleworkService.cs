@@ -259,10 +259,10 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
             .Sum(d => d.IsHalfDay ? 0.5 : 1.0);
 
         double teleworkSSDays = days
-            .Where(d => d.Type == DayType.TeleworkFrance)
+            .Where(d => d.Type.CountsAsTelework())
             .Sum(d => d.IsHalfDay ? 0.5 : 1.0);
 
-        double teleworkTaxDays = days.Count(d => d.Type == DayType.TeleworkFrance);
+        double teleworkTaxDays = days.Count(d => d.Type.CountsAsTelework());
         int    missionDays     = days.Count(d => d.Type == DayType.MissionAbroad);
 
         return new TeleworkStats

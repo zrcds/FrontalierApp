@@ -19,6 +19,13 @@ public static class DayTypeExtensions
     // keeps R&R in the total and only takes PTO out (confirmed 2026-10-07).
     public static bool IsWorkedDay(this DayType type) =>
         type is DayType.Switzerland or DayType.TeleworkFrance or DayType.MissionAbroad or DayType.RnR;
+
+    // Days counted as telework in the SS% and tax% numerators. Ripple HR reports the share of
+    // worked days not spent in the office, so an R&R day away from the office counts like
+    // telework. At 2026-08-31: (25 telework + 2 R&R) / 139 = 19.4%, the complement of HR's
+    // 80.6% in-office rate. An R&R day spent in the office should be logged as Switzerland.
+    public static bool CountsAsTelework(this DayType type) =>
+        type is DayType.TeleworkFrance or DayType.RnR;
 }
 
 public class WorkDay

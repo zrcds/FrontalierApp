@@ -80,7 +80,7 @@
     <div class="d-flex gap-3 align-items-center small mb-3 flex-wrap">
         <span class="text-muted fw-semibold">YTD SS</span>
         <span class="text-muted"><span class="@ssColor(ytd.SocialSecurityPercent)">@ytd.SocialSecurityPercent.ToString("0.0")%</span>
-            <span class="ms-1">(@ytd.TeleworkSSDays.ToString("0.#") TW / @ytd.TotalWorkedDays.ToString("0.#") worked)</span></span>
+            <span class="ms-1">(@ytd.TeleworkSSDays.ToString("0.#") TW+R&R / @ytd.TotalWorkedDays.ToString("0.#") worked)</span></span>
         @if (ms.TotalWorkedDays > 0)
         {
             <span class="text-muted">· this month <span class="@ssColor(ms.SocialSecurityPercent)">@ms.SocialSecurityPercent.ToString("0.0")%</span></span>
@@ -355,8 +355,8 @@
     private TeleworkStats Stats(List<WorkDay> days) => new()
     {
         TotalWorkedDays = days.Where(d => d.Type.IsWorkedDay()).Sum(d => d.IsHalfDay ? 0.5 : 1.0),
-        TeleworkSSDays  = days.Where(d => d.Type == DayType.TeleworkFrance).Sum(d => d.IsHalfDay ? 0.5 : 1.0),
-        TeleworkTaxDays = days.Count(d => d.Type == DayType.TeleworkFrance),
+        TeleworkSSDays  = days.Where(d => d.Type.CountsAsTelework()).Sum(d => d.IsHalfDay ? 0.5 : 1.0),
+        TeleworkTaxDays = days.Count(d => d.Type.CountsAsTelework()),
         MissionDays     = days.Count(d => d.Type == DayType.MissionAbroad),
         HasA1Certificate = Telework.HasA1Certificate,
     };
