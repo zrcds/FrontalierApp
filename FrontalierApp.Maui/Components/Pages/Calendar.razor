@@ -354,7 +354,7 @@
 
     private TeleworkStats Stats(List<WorkDay> days) => new()
     {
-        TotalWorkedDays = days.Where(d => d.Type is DayType.Switzerland or DayType.TeleworkFrance or DayType.MissionAbroad).Sum(d => d.IsHalfDay ? 0.5 : 1.0),
+        TotalWorkedDays = days.Where(d => d.Type.IsWorkedDay()).Sum(d => d.IsHalfDay ? 0.5 : 1.0),
         TeleworkSSDays  = days.Where(d => d.Type == DayType.TeleworkFrance).Sum(d => d.IsHalfDay ? 0.5 : 1.0),
         TeleworkTaxDays = days.Count(d => d.Type == DayType.TeleworkFrance),
         MissionDays     = days.Count(d => d.Type == DayType.MissionAbroad),

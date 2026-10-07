@@ -338,7 +338,7 @@
             var type = existing?.Type
                 ?? (d.DayOfWeek == DayOfWeek.Monday ? DayType.TeleworkFrance : DayType.Switzerland);
 
-            if (type is DayType.Switzerland or DayType.TeleworkFrance or DayType.MissionAbroad)
+            if (type.IsWorkedDay())
                 worked += days;
             if (type == DayType.TeleworkFrance)
                 tw += days;

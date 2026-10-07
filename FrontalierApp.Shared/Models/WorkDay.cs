@@ -13,6 +13,14 @@ public enum DayType
     RnR             = 8,
 }
 
+public static class DayTypeExtensions
+{
+    // Days in the SS% and tax% totals. R&R counts as a working day, not as PTO: Ripple HR
+    // keeps R&R in the total and only takes PTO out (confirmed 2026-10-07).
+    public static bool IsWorkedDay(this DayType type) =>
+        type is DayType.Switzerland or DayType.TeleworkFrance or DayType.MissionAbroad or DayType.RnR;
+}
+
 public class WorkDay
 {
     public Guid     Id        { get; set; } = Guid.NewGuid();

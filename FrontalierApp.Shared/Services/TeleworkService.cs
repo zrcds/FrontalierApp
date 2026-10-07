@@ -255,7 +255,7 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
         var days = _days.Where(d => d.Date.Year == year && (asOf == null || d.Date <= asOf.Value)).ToList();
 
         double totalWorkedDays = days
-            .Where(d => d.Type is DayType.Switzerland or DayType.TeleworkFrance or DayType.MissionAbroad)
+            .Where(d => d.Type.IsWorkedDay())
             .Sum(d => d.IsHalfDay ? 0.5 : 1.0);
 
         double teleworkSSDays = days
@@ -291,7 +291,7 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
         var today = DateOnly.FromDateTime(DateTime.Today);
         return _days
             .Where(d => d.Date.Year == year && d.Date > today &&
-                        d.Type is DayType.Switzerland or DayType.TeleworkFrance or DayType.MissionAbroad)
+                        d.Type.IsWorkedDay())
             .Select(d => (DateOnly?)d.Date)
             .Max();
     }
