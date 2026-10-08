@@ -281,7 +281,7 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
         {
             if (d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) continue;
             var existing = _days.FirstOrDefault(x => x.Date == d);
-            if (existing != null) existing.Type = type;
+            if (existing != null) { existing.Type = type; existing.WorkedInOffice = false; }
             else _days.Add(new WorkDay { Date = d, Type = type });
             count++;
         }
@@ -297,14 +297,14 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
         var days = _days.Where(d => d.Date.Year == year && (asOf == null || d.Date <= asOf.Value)).ToList();
 
         double totalWorkedDays = days
-            .Where(d => d.Type.IsWorkedDay())
+            .Where(d => d.CountedType.IsWorkedDay())
             .Sum(d => d.IsHalfDay ? 0.5 : 1.0);
 
         double teleworkSSDays = days
-            .Where(d => d.Type.CountsAsTelework())
+            .Where(d => d.CountedType.CountsAsTelework())
             .Sum(d => d.IsHalfDay ? 0.5 : 1.0);
 
-        double teleworkTaxDays = days.Count(d => d.Type.CountsAsTelework());
+        double teleworkTaxDays = days.Count(d => d.CountedType.CountsAsTelework());
         int    missionDays     = days.Count(d => d.Type == DayType.MissionAbroad);
 
         return new TeleworkStats
@@ -321,8 +321,8 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
         var days  = _days.Where(d => d.Date.Year == year).ToList();
         static double Weight(WorkDay d) => d.IsHalfDay ? 0.5 : 1.0;
 
-        double telework = days.Where(d => d.Type.CountsAsTelework()).Sum(Weight);
-        double worked   = days.Where(d => d.Type.IsWorkedDay()).Sum(Weight);
+        double telework = days.Where(d => d.CountedType.CountsAsTelework()).Sum(Weight);
+        double worked   = days.Where(d => d.CountedType.IsWorkedDay()).Sum(Weight);
 
         int unlogged = 0, unloggedTelework = 0;
         for (var d = today; d <= new DateOnly(year, 12, 31); d = d.AddDays(1))
@@ -360,7 +360,7 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
         var today = DateOnly.FromDateTime(DateTime.Today);
         return _days
             .Where(d => d.Date.Year == year && d.Date > today &&
-                        d.Type.IsWorkedDay())
+                        d.CountedType.IsWorkedDay())
             .Select(d => (DateOnly?)d.Date)
             .Max();
     }

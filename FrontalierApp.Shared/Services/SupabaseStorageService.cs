@@ -37,7 +37,7 @@ public class SupabaseStorageService(HttpClient http, AuthService auth)
     public async Task<List<WorkDay>> FetchAllAsync()
     {
         var req = new HttpRequestMessage(HttpMethod.Get,
-            $"{SupabaseConfig.Url}/rest/v1/workdays?select=id,date,type,is_half_day,note&order=date");
+            $"{SupabaseConfig.Url}/rest/v1/workdays?select=id,date,type,is_half_day,note,worked_in_office&order=date");
         Auth(req);
         var resp = await SendAsync(req);
         resp.EnsureSuccessStatusCode();
@@ -82,13 +82,14 @@ public class SupabaseStorageService(HttpClient http, AuthService auth)
         Date      = DateOnly.ParseExact(r.Date, "yyyy-MM-dd", null),
         Type      = (DayType)r.Type,
         IsHalfDay = r.IsHalfDay,
-        Note      = r.Note
+        Note      = r.Note,
+        WorkedInOffice = r.WorkedInOffice
     };
 
     private static SupabaseRow FromWorkDay(WorkDay d, string userId) => new(
         d.Id.ToString(), userId,
         d.Date.ToString("yyyy-MM-dd"),
-        (int)d.Type, d.IsHalfDay, d.Note);
+        (int)d.Type, d.IsHalfDay, d.Note, d.WorkedInOffice);
 }
 
 internal record SupabaseRow(
@@ -97,4 +98,5 @@ internal record SupabaseRow(
     [property: JsonPropertyName("date")]        string  Date,
     [property: JsonPropertyName("type")]        int     Type,
     [property: JsonPropertyName("is_half_day")] bool    IsHalfDay,
-    [property: JsonPropertyName("note")]        string? Note);
+    [property: JsonPropertyName("note")]        string? Note,
+    [property: JsonPropertyName("worked_in_office")] bool WorkedInOffice);

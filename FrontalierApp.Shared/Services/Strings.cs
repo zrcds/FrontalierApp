@@ -193,6 +193,8 @@ public static class Strings
         [("en","edit_title")]    = "Edit",
         [("fr","label_date")]    = "Date",
         [("en","label_date")]    = "Date",
+        [("fr","label_worked_office")] = "Travaillé au bureau",
+        [("en","label_worked_office")] = "Worked in the office",
         [("fr","label_half")]    = "Demi-journée",
         [("en","label_half")]    = "Half day",
         [("fr","btn_add")]       = "Ajouter",

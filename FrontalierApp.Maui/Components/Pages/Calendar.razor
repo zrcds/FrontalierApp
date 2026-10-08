@@ -114,7 +114,7 @@
             <span class="@(cell.Date == _today ? "today-num" : "")">@cell.Date.Day</span>
             @if (cell.Entry != null)
             {
-                <span class="cell-icon">@DayIcon(cell.Entry.Type)</span>
+                <span class="cell-icon">@DayIcon(cell.Entry.Type)@(cell.Entry.CountedType != cell.Entry.Type ? DayIcon(cell.Entry.CountedType) : "")</span>
             }
         </div>
     }
@@ -153,6 +153,13 @@
                             <label class="form-check-label" for="editHalf">@Lang.T("label_half")</label>
                         </div>
                     }
+                    @if (Enum.TryParse<DayType>(editType, out var t) && t.CanBeWorkedInOffice())
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="editOffice" @bind="editWorkedInOffice" />
+                            <label class="form-check-label" for="editOffice">🏢 @Lang.T("label_worked_office")</label>
+                        </div>
+                    }
                 </div>
                 <div class="modal-footer py-2">
                     @if (_editEntry != null)
@@ -176,6 +183,7 @@
     private DateOnly? selectedDate;
     private string editType = "None";
     private bool editHalfDay;
+    private bool editWorkedInOffice;
     private WorkDay? _editEntry;
 
     private bool showImport;
@@ -221,6 +229,7 @@
         _editEntry   = cell.Entry;
         editType     = cell.Entry?.Type.ToString() ?? "None";
         editHalfDay  = cell.Entry?.IsHalfDay ?? false;
+        editWorkedInOffice = cell.Entry?.WorkedInOffice ?? false;
     }
 
     private void CloseEdit() { selectedDate = null; _editEntry = null; }
@@ -235,12 +244,14 @@
         else
         {
             var type = Enum.Parse<DayType>(editType);
+            var inOffice = editWorkedInOffice && type.CanBeWorkedInOffice();
             if (_editEntry == null)
-                await Telework.AddAsync(new WorkDay { Date = selectedDate.Value, Type = type, IsHalfDay = editHalfDay });
+                await Telework.AddAsync(new WorkDay { Date = selectedDate.Value, Type = type, IsHalfDay = editHalfDay, WorkedInOffice = inOffice });
             else
             {
                 _editEntry.Type = type;
                 _editEntry.IsHalfDay = editHalfDay;
+                _editEntry.WorkedInOffice = inOffice;
                 await Telework.UpdateAsync(_editEntry);
             }
         }
@@ -354,9 +365,9 @@
 
     private TeleworkStats Stats(List<WorkDay> days) => new()
     {
-        TotalWorkedDays = days.Where(d => d.Type.IsWorkedDay()).Sum(d => d.IsHalfDay ? 0.5 : 1.0),
-        TeleworkSSDays  = days.Where(d => d.Type.CountsAsTelework()).Sum(d => d.IsHalfDay ? 0.5 : 1.0),
-        TeleworkTaxDays = days.Count(d => d.Type.CountsAsTelework()),
+        TotalWorkedDays = days.Where(d => d.CountedType.IsWorkedDay()).Sum(d => d.IsHalfDay ? 0.5 : 1.0),
+        TeleworkSSDays  = days.Where(d => d.CountedType.CountsAsTelework()).Sum(d => d.IsHalfDay ? 0.5 : 1.0),
+        TeleworkTaxDays = days.Count(d => d.CountedType.CountsAsTelework()),
         MissionDays     = days.Count(d => d.Type == DayType.MissionAbroad),
         HasA1Certificate = Telework.HasA1Certificate,
     };

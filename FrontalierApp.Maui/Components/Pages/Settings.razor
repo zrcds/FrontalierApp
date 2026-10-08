@@ -149,12 +149,16 @@
                     @foreach (var d in companyDays)
                     {
                         <tr>
-                            <td class="ps-3" style="width:24px;">@TypeIcon(d.Type)</td>
+                            <td class="ps-3 text-nowrap" style="width:24px;">@TypeIcon(d.Type)@(d.WorkedInOffice ? "🏢" : "")</td>
                             <td class="text-end" style="width:24px;">@d.Date.Day</td>
                             <td style="width:36px;">@d.Date.ToString("MMM")</td>
                             <td style="width:40px;">@d.Date.Year</td>
                             <td>
                                 <span class="badge @TypeBadge(d.Type) me-2">@TypeLabel(d.Type)</span>
+                                @if (d.WorkedInOffice)
+                                {
+                                    <span class="badge bg-primary me-2">🏢 @Lang.T("label_worked_office")</span>
+                                }
                                 @if (!string.IsNullOrEmpty(d.Note))
                                 {
                                     <span class="text-muted">@d.Note</span>
