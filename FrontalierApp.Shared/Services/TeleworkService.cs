@@ -6,6 +6,9 @@ namespace FrontalierApp.Services;
 public record VacationPeriod(DateOnly Start, DateOnly End, int Days);
 public record PublicHolidayInfo(DateOnly Date, string NameFr, string NameEn);
 
+// Year-to-date SS% at a date; Projected once past today.
+public record TrajectoryPoint(DateOnly Date, double Percent, bool Projected);
+
 // Where the year ends. Logged days, past and future (R&R, vacation, planned telework), are
 // taken as they are, so the year-end R&R block only counts once it has been entered.
 // Unlogged workdays from today on follow the user's usual week: UnloggedTeleworkDays of
@@ -13,7 +16,7 @@ public record PublicHolidayInfo(DateOnly Date, string NameFr, string NameEn);
 public record YearEndProjection(
     double TeleworkDays, double WorkedDays, double Limit,
     int UnloggedDays, int UnloggedTeleworkDays,
-    double FutureRnRDays, double FutureVacationDays, bool DecemberRnRLogged)
+    IReadOnlyList<TrajectoryPoint> Trajectory)
 {
     // Turning an unlogged office day into telework adds 1 to the numerator and nothing to
     // the total, so each budget is a count of telework days.
@@ -317,29 +320,44 @@ public class TeleworkService(IStorageService localStorage, AuthService auth, Sup
 
     public YearEndProjection ProjectYearEnd(int year)
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        var days  = _days.Where(d => d.Date.Year == year).ToList();
-        static double Weight(WorkDay d) => d.IsHalfDay ? 0.5 : 1.0;
+        var today  = DateOnly.FromDateTime(DateTime.Today);
+        var end    = new DateOnly(year, 12, 31);
+        var byDate = _days.Where(d => d.Date.Year == year)
+            .GroupBy(d => d.Date).ToDictionary(g => g.Key, g => g.First());
 
-        double telework = days.Where(d => d.CountedType.CountsAsTelework()).Sum(Weight);
-        double worked   = days.Where(d => d.CountedType.IsWorkedDay()).Sum(Weight);
-
+        double telework = 0, worked = 0;
         int unlogged = 0, unloggedTelework = 0;
-        for (var d = today; d <= new DateOnly(year, 12, 31); d = d.AddDays(1))
-        {
-            if (d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday || HasDate(d)) continue;
-            unlogged++;
-            if (_teleworkWeekdays.Contains(d.DayOfWeek)) unloggedTelework++;
-        }
-        worked += unlogged;
+        var trajectory = new List<TrajectoryPoint>();
 
-        var future = days.Where(d => d.Date >= today).ToList();
+        for (var d = new DateOnly(year, 1, 1); d <= end; d = d.AddDays(1))
+        {
+            if (d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
+            {
+                if (byDate.TryGetValue(d, out var day))
+                {
+                    double w = day.IsHalfDay ? 0.5 : 1.0;
+                    if (day.CountedType.IsWorkedDay())      worked   += w;
+                    if (day.CountedType.CountsAsTelework()) telework += w;
+                }
+                else if (d >= today)
+                {
+                    worked++;
+                    unlogged++;
+                    if (_teleworkWeekdays.Contains(d.DayOfWeek)) { telework++; unloggedTelework++; }
+                }
+            }
+
+            // One point a week, plus today (where actual turns into projected) and Dec 31.
+            // The first few weeks are skipped: on a handful of days the rate swings wildly.
+            if ((d.DayOfWeek == DayOfWeek.Sunday || d == today || d == end) && worked >= 10)
+                trajectory.Add(new TrajectoryPoint(d, telework / worked * 100, d > today));
+        }
+
+        // The usual-week figures add the projected telework back in, so this record holds
+        // only the logged part.
         return new YearEndProjection(
-            telework, worked, new TeleworkStats { HasA1Certificate = _hasA1 }.CompanySSLimit,
-            unlogged, unloggedTelework,
-            FutureRnRDays:      future.Where(d => d.Type == DayType.RnR).Sum(Weight),
-            FutureVacationDays: future.Where(d => d.Type == DayType.Vacation).Sum(Weight),
-            DecemberRnRLogged:  days.Any(d => d.Date.Month == 12 && d.Type == DayType.RnR));
+            telework - unloggedTelework, worked, new TeleworkStats { HasA1Certificate = _hasA1 }.CompanySSLimit,
+            unlogged, unloggedTelework, trajectory);
     }
 
     public int GetRemainingUnloggedWorkdays(int year)

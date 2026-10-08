@@ -32,11 +32,4 @@ public class LangService(IStorageService localStorage)
     private static readonly string[] DaysFr = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
 
     public string DayShort(DayOfWeek day) => (_lang == "fr" ? DaysFr : DaysEn)[(int)day];
-
-    // Monday-first list such as "Mon, Fri", or "—" when empty.
-    public string DayList(IEnumerable<DayOfWeek> days)
-    {
-        var ordered = days.OrderBy(d => ((int)d + 6) % 7).Select(DayShort).ToList();
-        return ordered.Count == 0 ? "—" : string.Join(", ", ordered);
-    }
 }

@@ -113,25 +113,32 @@
 
     @if (yearEnd != null)
     {
-        <div class="alert @YearEndClass">
-            <strong>@Lang.T("ye_title", yearEnd.Limit, 100 - yearEnd.Limit)</strong>
-            @if (yearEnd.IsOver)
-            {
-                <span>@Lang.T("ye_over", yearEnd.AllOfficePercent.ToString("0.0"), yearEnd.OfficeDaysNeeded)</span>
-            }
-            else if (yearEnd.IsTight)
-            {
-                <span>@Lang.T("ye_tight", yearEnd.UsualWeekPercent.ToString("0.0"), yearEnd.UsualTeleworkDaysToSwap)</span>
-            }
-            else
-            {
-                <span>@Lang.T("ye_ok", yearEnd.UsualWeekPercent.ToString("0.0"), yearEnd.SpareTeleworkDays.ToString("0.#"))</span>
-            }
-            <div class="small mt-1">@Lang.T("ye_basis", yearEnd.UnloggedDays, Lang.DayList(Telework.TeleworkWeekdays), yearEnd.FutureRnRDays.ToString("0.#"), yearEnd.FutureVacationDays.ToString("0.#"))</div>
-            @if (!yearEnd.DecemberRnRLogged)
-            {
-                <div class="small fw-semibold mt-1">@Lang.T("ye_no_rnr")</div>
-            }
+        <div class="card mb-4 border-0 border-start border-4 @YearEndBorder shadow-sm">
+            <div class="card-body py-2">
+                <div class="d-flex flex-wrap align-items-baseline gap-2">
+                    <span class="fw-semibold">@Lang.T("ye_title")</span>
+                    <span class="fw-bold @YearEndText">@YearEndIcon @YearEndPercent.ToString("0.0")%</span>
+                    <span class="small text-muted">@YearEndDetail</span>
+                </div>
+                @{ var chart = Sparkline(yearEnd); }
+                <svg viewBox="0 0 365 @SparkHeight" preserveAspectRatio="none" class="d-block w-100 mt-1" style="height:@(SparkHeight)px;" role="img"
+                     aria-label="@($"{Lang.T("ye_title")}: {YearEndPercent:0.0}%")">
+                    <line x1="0" x2="365" y1="@chart.LimitY" y2="@chart.LimitY" stroke="var(--bs-danger)" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0.6" />
+                    <polyline points="@chart.Actual" fill="none" stroke="var(--bs-primary)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+                    <polyline points="@chart.Projected" fill="none" stroke="var(--bs-primary)" stroke-width="2" stroke-dasharray="4 3" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+                    @foreach (var pt in yearEnd.Trajectory)
+                    {
+                        <rect x="@X(pt.Date.DayOfYear - 4)" y="0" width="7" height="@SparkHeight" fill="transparent">
+                            <title>@pt.Date.ToString("MMM d")@(pt.Projected ? " (proj.)" : ""): @pt.Percent.ToString("0.0")%</title>
+                        </rect>
+                    }
+                </svg>
+                <div class="d-flex justify-content-between text-muted" style="font-size:0.7rem;">
+                    <span>@MonthShort(1)</span>
+                    <span class="text-danger">— @Lang.T("ye_limit", yearEnd.Limit)</span>
+                    <span>@MonthShort(12)</span>
+                </div>
+            </div>
         </div>
     }
 
@@ -297,7 +304,45 @@
 
     private YearEndProjection? yearEnd;
 
-    private string YearEndClass => yearEnd!.IsOver ? "alert-danger" : yearEnd.IsTight ? "alert-warning" : "alert-success";
+    private double YearEndPercent => yearEnd!.IsOver ? yearEnd.AllOfficePercent : yearEnd.UsualWeekPercent;
+    private string YearEndBorder  => yearEnd!.IsOver ? "border-danger" : yearEnd.IsTight ? "border-warning" : "border-success";
+    private string YearEndText    => yearEnd!.IsOver ? "text-danger"   : yearEnd.IsTight ? "text-warning"   : "text-success";
+    private string YearEndIcon    => yearEnd!.IsOver ? "✕" : yearEnd.IsTight ? "⚠" : "✓";
+
+    private string YearEndDetail
+    {
+        get
+        {
+            int officePerWeek = 5 - Telework.TeleworkWeekdays.Count(d => d is not (DayOfWeek.Saturday or DayOfWeek.Sunday));
+            return yearEnd!.IsOver  ? Lang.T("ye_over", yearEnd.OfficeDaysNeeded)
+                 : yearEnd.IsTight ? Lang.T("ye_tight", officePerWeek, yearEnd.UsualTeleworkDaysToSwap)
+                 :                   Lang.T("ye_ok", officePerWeek, yearEnd.SpareTeleworkDays.ToString("0.#"));
+        }
+    }
+
+    // ── Year-end sparkline: x = day of year (0–365), y = SS% from 0 to just above the limit
+    private const int SparkHeight = 48;
+
+    private record SparkChart(string Actual, string Projected, string LimitY);
+
+    private static string X(int dayOfYear) => Math.Clamp(dayOfYear - 1, 0, 365).ToString(CultureInfo.InvariantCulture);
+
+    private static SparkChart Sparkline(YearEndProjection ye)
+    {
+        double top = Math.Max(ye.Limit, ye.Trajectory.Select(p => p.Percent).DefaultIfEmpty(0).Max()) * 1.15;
+        string Y(double pct) => (SparkHeight - 2 - pct / top * (SparkHeight - 4)).ToString("0.##", CultureInfo.InvariantCulture);
+        string Pts(IEnumerable<TrajectoryPoint> pts) => string.Join(" ", pts.Select(p => $"{X(p.Date.DayOfYear)},{Y(p.Percent)}"));
+
+        var actual    = ye.Trajectory.Where(p => !p.Projected).ToList();
+        var projected = actual.TakeLast(1).Concat(ye.Trajectory.Where(p => p.Projected));
+        return new(Pts(actual), Pts(projected), Y(ye.Limit));
+    }
+
+    // Hard-coded: WebAssembly may not ship French culture data.
+    private string MonthShort(int month) => (Lang.Lang == "fr", month) switch
+    {
+        (true, 1) => "janv.", (true, _) => "déc.", (false, 1) => "Jan", _ => "Dec",
+    };
 
     // ── Missing days modal ────────────────────────────────────────────
 
